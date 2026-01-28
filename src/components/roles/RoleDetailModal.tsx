@@ -24,8 +24,8 @@ export default function RoleDetailModal({ role, isOpen, onClose }: RoleDetailMod
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-white sm:bg-gray-50/50 sm:backdrop-blur-[2px] flex items-stretch sm:items-center justify-center z-50 p-0 sm:p-4">
+      <div className="bg-white w-full h-full sm:h-auto sm:rounded-lg sm:max-w-2xl sm:max-h-[85vh] overflow-y-auto">
         <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
           <div className="min-w-0">
             <div className="text-sm text-gray-500">Role</div>

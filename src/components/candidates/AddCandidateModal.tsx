@@ -112,8 +112,8 @@ export default function AddCandidateModal({ isOpen, onClose, roles }: AddCandida
 
   return (
     <>
-      <div className="fixed inset-0 bg-gray-50/50 backdrop-blur-[2px] flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 w-full max-w-md">
+      <div className="fixed inset-0 bg-white sm:bg-gray-50/50 sm:backdrop-blur-[2px] flex items-stretch sm:items-center justify-center z-50">
+        <div className="bg-white w-full h-full sm:h-auto sm:rounded-lg p-6 sm:max-w-md overflow-y-auto">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold text-gray-900">Add Candidate</h2>
             <button
@@ -240,8 +240,8 @@ export default function AddCandidateModal({ isOpen, onClose, roles }: AddCandida
 
       {/* Add Role Modal */}
       {showRoleModal && (
-        <div className="fixed inset-0 bg-gray-50/50 backdrop-blur-[2px] flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-screen overflow-y-auto">
+        <div className="fixed inset-0 bg-white sm:bg-gray-50/50 sm:backdrop-blur-[2px] flex items-stretch sm:items-center justify-center z-50">
+          <div className="bg-white w-full h-full sm:h-auto sm:rounded-lg p-6 sm:max-w-md sm:max-h-screen overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold text-gray-900">Add New Role</h2>
               <button
