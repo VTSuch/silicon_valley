@@ -25,13 +25,13 @@ export default function DashboardLayout() {
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-gray-50">
+    <div className="flex flex-col md:flex-row min-h-screen md:h-screen bg-gray-50">
       <Sidebar 
         activeTab={activeTab} 
         onTabChange={setActiveTab}
         userEmail={user?.email || ''}
       />
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 md:overflow-auto">
         {renderContent()}
       </div>
     </div>
