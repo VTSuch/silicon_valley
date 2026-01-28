@@ -14,6 +14,7 @@ export default function Dashboard() {
     'cv_rejected',
     'sent_to_agency',
     'sent_to_client',
+    'submitted',
     'first_interview',
     'second_interview',
     'third_interview',

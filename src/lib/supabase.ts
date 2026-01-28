@@ -62,7 +62,7 @@ export type Database = {
           email: string
           linkedin_url: string | null
           role_id: string
-          status: 'cv_rejected' | 'sent_to_agency' | 'sent_to_client' | 'first_interview' | 'second_interview' | 'third_interview' | 'fourth_interview' | 'final_interview' | 'client_rejected' | 'offer_accepted' | 'candidate_quit' | 'standby'
+          status: 'cv_rejected' | 'sent_to_agency' | 'sent_to_client' | 'submitted' | 'first_interview' | 'second_interview' | 'third_interview' | 'fourth_interview' | 'final_interview' | 'client_rejected' | 'offer_accepted' | 'candidate_quit' | 'standby'
           created_at: string
         }
         Insert: {
@@ -71,7 +71,7 @@ export type Database = {
           email: string
           linkedin_url?: string | null
           role_id: string
-          status?: 'cv_rejected' | 'sent_to_agency' | 'sent_to_client' | 'first_interview' | 'second_interview' | 'third_interview' | 'fourth_interview' | 'final_interview' | 'client_rejected' | 'offer_accepted' | 'candidate_quit' | 'standby'
+          status?: 'cv_rejected' | 'sent_to_agency' | 'sent_to_client' | 'submitted' | 'first_interview' | 'second_interview' | 'third_interview' | 'fourth_interview' | 'final_interview' | 'client_rejected' | 'offer_accepted' | 'candidate_quit' | 'standby'
           created_at?: string
         }
         Update: {
@@ -80,7 +80,7 @@ export type Database = {
           email?: string
           linkedin_url?: string | null
           role_id?: string
-          status?: 'cv_rejected' | 'sent_to_agency' | 'sent_to_client' | 'first_interview' | 'second_interview' | 'third_interview' | 'fourth_interview' | 'final_interview' | 'client_rejected' | 'offer_accepted' | 'candidate_quit' | 'standby'
+          status?: 'cv_rejected' | 'sent_to_agency' | 'sent_to_client' | 'submitted' | 'first_interview' | 'second_interview' | 'third_interview' | 'fourth_interview' | 'final_interview' | 'client_rejected' | 'offer_accepted' | 'candidate_quit' | 'standby'
           created_at?: string
         }
       }
