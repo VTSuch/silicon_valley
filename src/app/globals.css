@@ -8,6 +8,16 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-brand-50: #fff7e6;
+  --color-brand-100: #fdecc8;
+  --color-brand-200: #f8d58a;
+  --color-brand-300: #efb94f;
+  --color-brand-400: #e29d25;
+  --color-brand-500: #c78418;
+  --color-brand-600: #9f6513;
+  --color-brand-700: #7a4c12;
+  --color-brand-800: #5f3b12;
+  --color-brand-900: #4f3211;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

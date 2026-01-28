@@ -1,36 +1,117 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Silicon Valley - Headhunting & Talent Management Dashboard
 
-## Getting Started
+Un dashboard web moderno y funcional para recruiting/headhunting construido con Next.js, TypeScript, Tailwind CSS y Supabase.
 
-First, run the development server:
+## Stack Tecnológico
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **Frontend**: Next.js 15 (App Router) + TypeScript
+- **Estilos**: Tailwind CSS (diseño minimalista y limpio)
+- **Backend/Auth/DB**: Supabase
+- **Drag & Drop**: @dnd-kit
+- **Iconos**: Lucide React
+
+## Características
+
+- 🔐 Autenticación con Supabase Auth
+- 📊 Dashboard con KPIs y métricas
+- 👥 Gestión de candidatos
+- 📋 Pipeline Kanban con drag & drop
+- 🏢 Gestión de roles vacantes
+- 📱 Responsive design
+
+## Configuración
+
+### 1. Variables de Entorno
+
+Crea un archivo `.env.local` en la raíz del proyecto:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=tu_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=tu_supabase_service_role_key
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Configuración de Supabase
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Ejecuta el siguiente SQL en tu proyecto Supabase (Panel SQL Editor):
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```sql
+-- El contenido del archivo supabase-schema.sql
+```
 
-## Learn More
+### 3. Instalación y Ejecución
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+# Instalar dependencias
+npm install
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# Ejecutar en desarrollo
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Abre [http://localhost:3000](http://localhost:3000) para ver la aplicación.
 
-## Deploy on Vercel
+## Estructura del Proyecto
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+src/
+├── app/                    # App Router de Next.js
+├── components/
+│   ├── auth/              # Componentes de autenticación
+│   ├── candidates/        # Gestión de candidatos
+│   ├── dashboard/         # Dashboard principal
+│   ├── layout/           # Layouts y sidebar
+│   └── pipeline/         # Kanban pipeline
+├── hooks/                # Hooks personalizados
+├── lib/                  # Utilidades (Supabase client)
+└── types/                # Tipos TypeScript
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Funcionalidades Principales
+
+### 1. Login
+- Pantalla de login minimalista
+- Autenticación con email y password
+- Logo "Silicon Valley" con tema recruiting
+
+### 2. Dashboard
+- KPIs: Total candidates, roles, offers accepted, etc.
+- Tablas de candidatos recientes
+- Lista de roles con conteo de candidatos
+
+### 3. Candidates
+- Tabla completa de candidatos
+- Modal para añadir nuevos candidatos
+- Dropdown de roles con opción de crear nuevos roles
+- Estados predefinidos del pipeline
+
+### 4. Pipeline (Kanban)
+- Vista Kanban con drag & drop
+- Columnas por cada estado del candidato
+- Actualización en tiempo real del estado
+- Diseño visual y funcional
+
+## Estados del Candidato
+
+Los candidatos pueden tener los siguientes estados:
+- cv_rejected
+- sent_to_agency
+- sent_to_client
+- first_interview
+- second_interview
+- third_interview
+- fourth_interview
+- final_interview
+- client_rejected
+- offer_accepted
+- standby
+
+## Deploy
+
+La aplicación está lista para deploy en plataformas como Vercel, Netlify o cualquier servicio que soporte Next.js.
+
+## Notas
+
+- El diseño es minimalista y pensado para uso diario interno
+- Prioridad desktop pero responsive para móviles
+- Sin complejidad innecesaria, enfocado en funcionalidad
