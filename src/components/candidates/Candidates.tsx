@@ -2,15 +2,18 @@
 
 import { useState } from 'react'
 import { useCandidates, useRoles } from '@/hooks/useData'
-import { Plus, User, Building, Mail, ExternalLink } from 'lucide-react'
+import { Plus, User, Building, Mail, ExternalLink, Pencil } from 'lucide-react'
 import AddCandidateModal from './AddCandidateModal'
+import EditCandidateModal from './EditCandidateModal'
 import { CandidateStatus } from '@/types'
 import StatusFilterDropdown from '@/components/common/StatusFilterDropdown'
 
 export default function Candidates() {
-  const { candidates, loading } = useCandidates()
+  const { candidates, loading, updateCandidate } = useCandidates()
   const { roles } = useRoles()
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<CandidateStatus[]>([])
 
   const candidateStatuses: CandidateStatus[] = [
@@ -55,6 +58,15 @@ export default function Candidates() {
   const filteredCandidates = statusFilter.length
     ? candidates.filter((c) => statusFilter.includes(c.status))
     : candidates
+
+  const selectedCandidate = selectedCandidateId
+    ? candidates.find((c) => c.id === selectedCandidateId) ?? null
+    : null
+
+  const openEdit = (candidateId: string) => {
+    setSelectedCandidateId(candidateId)
+    setIsEditModalOpen(true)
+  }
 
   if (loading) {
     return (
@@ -148,16 +160,26 @@ export default function Candidates() {
                   {new Date(candidate.created_at).toLocaleDateString()}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  {candidate.linkedin_url && (
-                    <a
-                      href={candidate.linkedin_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-brand-700 hover:text-brand-800 flex items-center"
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(candidate.id)}
+                      className="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800"
                     >
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
-                  )}
+                      <Pencil className="h-4 w-4" />
+                      Edit
+                    </button>
+                    {candidate.linkedin_url && (
+                      <a
+                        href={candidate.linkedin_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-gray-600 hover:text-gray-900 inline-flex items-center"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -170,6 +192,16 @@ export default function Candidates() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         roles={roles}
+      />
+
+      <EditCandidateModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        candidate={selectedCandidate}
+        roles={roles}
+        onSave={async (candidateId, updates) => {
+          await updateCandidate(candidateId, updates)
+        }}
       />
     </div>
   )

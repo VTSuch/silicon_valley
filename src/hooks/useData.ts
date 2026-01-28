@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Role, Candidate, CandidateWithRole } from '@/types'
+import { Role, Candidate, CandidateStatus, CandidateWithRole } from '@/types'
 
 export function useRoles() {
   const [roles, setRoles] = useState<Role[]>([])
@@ -91,10 +91,13 @@ export function useCandidates() {
     return data
   }
 
-  const updateCandidateStatus = async (id: string, status: string) => {
+  const updateCandidate = async (
+    id: string,
+    updates: Partial<Pick<Candidate, 'full_name' | 'email' | 'role_id' | 'status' | 'linkedin_url'>>
+  ) => {
     const { data, error } = await supabase
       .from('candidates')
-      .update({ status })
+      .update(updates)
       .eq('id', id)
       .select(`
         *,
@@ -107,13 +110,15 @@ export function useCandidates() {
       throw error
     }
 
-    setCandidates(prev => 
-      prev.map(c => c.id === id ? data : c)
-    )
+    setCandidates(prev => prev.map(c => (c.id === id ? data : c)))
     return data
   }
 
-  return { candidates, loading, fetchCandidates, createCandidate, updateCandidateStatus }
+  const updateCandidateStatus = async (id: string, status: CandidateStatus) => {
+    return updateCandidate(id, { status })
+  }
+
+  return { candidates, loading, fetchCandidates, createCandidate, updateCandidate, updateCandidateStatus }
 }
 
 export function useDashboard() {

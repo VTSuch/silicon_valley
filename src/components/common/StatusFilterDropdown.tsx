@@ -15,6 +15,7 @@ export default function StatusFilterDropdown({ value, onChange, options }: Statu
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
+  const dropdownRef = useRef<HTMLDivElement | null>(null)
   const [pos, setPos] = useState<{ top: number; left: number; width: number }>({
     top: 0,
     left: 0,
@@ -39,8 +40,12 @@ export default function StatusFilterDropdown({ value, onChange, options }: Statu
 
   useEffect(() => {
     const onDocMouseDown = (e: MouseEvent) => {
-      if (!containerRef.current) return
-      if (!containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node
+
+      const clickedInsideButton = !!containerRef.current?.contains(target)
+      const clickedInsideDropdown = !!dropdownRef.current?.contains(target)
+
+      if (!clickedInsideButton && !clickedInsideDropdown) {
         setOpen(false)
       }
     }
@@ -106,6 +111,7 @@ export default function StatusFilterDropdown({ value, onChange, options }: Statu
       {open && portalTarget
         ? createPortal(
             <div
+              ref={dropdownRef}
               style={{
                 position: 'fixed',
                 top: pos.top,
