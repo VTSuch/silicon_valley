@@ -22,11 +22,17 @@ export type Database = {
           id: string
           job_title: string
           company: string
+          location: string | null
           salary_min: number | null
           salary_max: number | null
           work_mode: 'remote' | 'onsite' | 'hybrid'
+          work_mode_details: string | null
+          experience: string | null
           description: string | null
           requirements: string | null
+          interview_process: string | null
+          about_company: string | null
+          skills: string | null
           bounty: number | null
           created_at: string
         }
@@ -34,11 +40,17 @@ export type Database = {
           id?: string
           job_title: string
           company: string
+          location?: string | null
           salary_min?: number | null
           salary_max?: number | null
           work_mode: 'remote' | 'onsite' | 'hybrid'
+          work_mode_details?: string | null
+          experience?: string | null
           description?: string | null
           requirements?: string | null
+          interview_process?: string | null
+          about_company?: string | null
+          skills?: string | null
           bounty?: number | null
           created_at?: string
         }
@@ -46,11 +58,17 @@ export type Database = {
           id?: string
           job_title?: string
           company?: string
+          location?: string | null
           salary_min?: number | null
           salary_max?: number | null
           work_mode?: 'remote' | 'onsite' | 'hybrid'
+          work_mode_details?: string | null
+          experience?: string | null
           description?: string | null
           requirements?: string | null
+          interview_process?: string | null
+          about_company?: string | null
+          skills?: string | null
           bounty?: number | null
           created_at?: string
         }

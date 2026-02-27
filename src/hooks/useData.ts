@@ -1,129 +1,36 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
-import { Role, Candidate, CandidateStatus, CandidateWithRole } from '@/types'
+import { useMemo } from 'react'
+import { CandidateStatus } from '@/types'
+import { useData } from '@/context/DataContext'
 
 export function useRoles() {
-  const [roles, setRoles] = useState<Role[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetchRoles()
-  }, [])
-
-  const fetchRoles = async () => {
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('roles')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      console.error('Error fetching roles:', error)
-    } else {
-      setRoles(data || [])
-    }
-    setLoading(false)
-  }
-
-  const createRole = async (role: Omit<Role, 'id' | 'created_at'>) => {
-    const { data, error } = await supabase
-      .from('roles')
-      .insert(role)
-      .select()
-      .single()
-
-    if (error) {
-      console.error('Error creating role:', error)
-      throw error
-    }
-
-    setRoles(prev => [data, ...prev])
-    return data
-  }
-
-  return { roles, loading, fetchRoles, createRole }
+  const { roles, rolesLoading, fetchRoles, createRole } = useData()
+  return { roles, loading: rolesLoading, fetchRoles, createRole }
 }
 
 export function useCandidates() {
-  const [candidates, setCandidates] = useState<CandidateWithRole[]>([])
-  const [loading, setLoading] = useState(true)
+  const {
+    candidates,
+    candidatesLoading,
+    fetchCandidates,
+    createCandidate,
+    updateCandidate,
+    updateCandidateStatus,
+  } = useData()
 
-  useEffect(() => {
-    fetchCandidates()
-  }, [])
-
-  const fetchCandidates = async () => {
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('candidates')
-      .select(`
-        *,
-        role:roles(*)
-      `)
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      console.error('Error fetching candidates:', error)
-    } else {
-      setCandidates(data || [])
-    }
-    setLoading(false)
+  return {
+    candidates,
+    loading: candidatesLoading,
+    fetchCandidates,
+    createCandidate,
+    updateCandidate,
+    updateCandidateStatus,
   }
-
-  const createCandidate = async (candidate: Omit<Candidate, 'id' | 'created_at'>) => {
-    const { data, error } = await supabase
-      .from('candidates')
-      .insert(candidate)
-      .select(`
-        *,
-        role:roles(*)
-      `)
-      .single()
-
-    if (error) {
-      console.error('Error creating candidate:', error)
-      throw error
-    }
-
-    setCandidates(prev => [data, ...prev])
-    return data
-  }
-
-  const updateCandidate = async (
-    id: string,
-    updates: Partial<Pick<Candidate, 'full_name' | 'email' | 'role_id' | 'status' | 'linkedin_url'>>
-  ) => {
-    const { data, error } = await supabase
-      .from('candidates')
-      .update(updates)
-      .eq('id', id)
-      .select(`
-        *,
-        role:roles(*)
-      `)
-      .single()
-
-    if (error) {
-      console.error('Error updating candidate:', error)
-      throw error
-    }
-
-    setCandidates(prev => prev.map(c => (c.id === id ? data : c)))
-    return data
-  }
-
-  const updateCandidateStatus = async (id: string, status: CandidateStatus) => {
-    return updateCandidate(id, { status })
-  }
-
-  return { candidates, loading, fetchCandidates, createCandidate, updateCandidate, updateCandidateStatus }
 }
 
 export function useDashboard() {
-  const { roles } = useRoles()
-  const { candidates } = useCandidates()
+  const { roles, candidates } = useData()
 
   const stats = {
     totalCandidates: candidates.length,
@@ -136,10 +43,14 @@ export function useDashboard() {
     sentToAgency: candidates.filter(c => c.status === 'sent_to_agency').length,
   }
 
-  const rolesWithCandidateCount = roles.map(role => ({
-    ...role,
-    candidateCount: candidates.filter(c => c.role_id === role.id).length
-  }))
+  const rolesWithCandidateCount = useMemo(
+    () =>
+      roles.map((role) => ({
+        ...role,
+        candidateCount: candidates.filter((c) => c.role_id === role.id).length,
+      })),
+    [roles, candidates]
+  )
 
   return { stats, rolesWithCandidateCount, candidates, roles }
 }

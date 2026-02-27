@@ -19,11 +19,17 @@ export interface Role {
   id: string
   job_title: string
   company: string
+  location?: string
   salary_min?: number
   salary_max?: number
   work_mode: WorkMode
+  work_mode_details?: string
+  experience?: string
   description?: string
   requirements?: string
+  interview_process?: string
+  about_company?: string
+  skills?: string
   bounty?: number
   created_at: string
 }

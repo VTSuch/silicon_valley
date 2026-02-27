@@ -77,5 +77,5 @@ CREATE POLICY "Authenticated users can insert candidates" ON candidates
 CREATE POLICY "Authenticated users can update candidates" ON candidates
   FOR UPDATE USING (auth.role() = 'authenticated');
 
-CREATE POLICY "Authenticated users can delete candidates" ON candidates
+  CREATE POLICY "Authenticated users can delete candidates" ON candidates
   FOR DELETE USING (auth.role() = 'authenticated');

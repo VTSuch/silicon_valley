@@ -3,13 +3,15 @@
 import { useMemo, useState } from 'react'
 import { useRoles } from '@/hooks/useData'
 import { Role } from '@/types'
-import { Briefcase, Building, Calendar } from 'lucide-react'
+import { Briefcase, Building, Calendar, Plus } from 'lucide-react'
 import RoleDetailModal from './RoleDetailModal'
+import AddRoleModal from './AddRoleModal'
 
 export default function Roles() {
   const { roles, loading } = useRoles()
   const [selectedRole, setSelectedRole] = useState<Role | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
 
   const openRole = (role: Role) => {
     setSelectedRole(role)
@@ -30,6 +32,13 @@ export default function Roles() {
     <div className="p-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Roles</h1>
+        <button
+          onClick={() => setIsAddModalOpen(true)}
+          className="flex items-center px-4 py-2 bg-brand-600 text-white rounded-md hover:bg-brand-700 transition-colors"
+        >
+          <Plus className="h-5 w-5 mr-2" />
+          Add Role
+        </button>
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -108,6 +117,8 @@ export default function Roles() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
       />
+
+      <AddRoleModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} />
     </div>
   )
 }

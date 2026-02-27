@@ -2,14 +2,17 @@
 
 import { useEffect, useState } from 'react'
 import { CandidateStatus, CandidateWithRole, Role } from '@/types'
-import { X, User, Mail, Briefcase } from 'lucide-react'
+import { X, User, Mail, Briefcase, ExternalLink } from 'lucide-react'
 
 interface EditCandidateModalProps {
   isOpen: boolean
   onClose: () => void
   candidate: CandidateWithRole | null
   roles: Role[]
-  onSave: (candidateId: string, updates: { full_name: string; email: string; role_id: string; status: CandidateStatus }) => Promise<void>
+  onSave: (
+    candidateId: string,
+    updates: { full_name: string; email: string; role_id: string; status: CandidateStatus; linkedin_url?: string }
+  ) => Promise<void>
 }
 
 const candidateStatuses: CandidateStatus[] = [
@@ -33,6 +36,7 @@ export default function EditCandidateModal({ isOpen, onClose, candidate, roles, 
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
+    linkedin_url: '',
     role_id: '',
     status: 'cv_rejected' as CandidateStatus,
   })
@@ -42,6 +46,7 @@ export default function EditCandidateModal({ isOpen, onClose, candidate, roles, 
     setFormData({
       full_name: candidate.full_name,
       email: candidate.email,
+      linkedin_url: candidate.linkedin_url ?? '',
       role_id: candidate.role_id,
       status: candidate.status,
     })
@@ -57,6 +62,7 @@ export default function EditCandidateModal({ isOpen, onClose, candidate, roles, 
       await onSave(candidate.id, {
         full_name: formData.full_name,
         email: formData.email,
+        linkedin_url: formData.linkedin_url || undefined,
         role_id: formData.role_id,
         status: formData.status,
       })
@@ -102,6 +108,19 @@ export default function EditCandidateModal({ isOpen, onClose, candidate, roles, 
                 required
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-brand-500 focus:border-brand-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">LinkedIn URL</label>
+            <div className="relative">
+              <ExternalLink className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <input
+                type="url"
+                value={formData.linkedin_url}
+                onChange={(e) => setFormData({ ...formData, linkedin_url: e.target.value })}
                 className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-brand-500 focus:border-brand-500"
               />
             </div>
