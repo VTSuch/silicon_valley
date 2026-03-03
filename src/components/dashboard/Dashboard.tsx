@@ -24,6 +24,7 @@ export default function Dashboard() {
     'offer_accepted',
     'candidate_quit',
     'standby',
+    'to_be_called',
   ]
 
   const formatStatus = (status: string) => {

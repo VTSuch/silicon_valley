@@ -24,6 +24,7 @@ const candidateStatuses: CandidateStatus[] = [
   'offer_accepted',
   'candidate_quit',
   'standby',
+  'to_be_called',
 ]
 
 const getStatusColor = (status: CandidateStatus) => {
@@ -41,6 +42,7 @@ const getStatusColor = (status: CandidateStatus) => {
     offer_accepted: 'bg-green-50 border-green-200',
     candidate_quit: 'bg-gray-50 border-gray-200',
     standby: 'bg-gray-50 border-gray-200',
+    to_be_called: 'bg-blue-50 border-blue-200',
   }
   return colors[status]
 }

@@ -14,6 +14,7 @@ export type CandidateStatus =
   | 'offer_accepted'
   | 'candidate_quit'
   | 'standby'
+  | 'to_be_called'
 
 export interface Role {
   id: string

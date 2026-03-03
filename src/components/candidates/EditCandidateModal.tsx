@@ -29,6 +29,7 @@ const candidateStatuses: CandidateStatus[] = [
   'offer_accepted',
   'candidate_quit',
   'standby',
+  'to_be_called',
 ]
 
 export default function EditCandidateModal({ isOpen, onClose, candidate, roles, onSave }: EditCandidateModalProps) {

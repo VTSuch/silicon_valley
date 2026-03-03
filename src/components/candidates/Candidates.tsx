@@ -30,6 +30,7 @@ export default function Candidates() {
     'offer_accepted',
     'candidate_quit',
     'standby',
+    'to_be_called',
   ]
 
   const getStatusColor = (status: string) => {
@@ -47,6 +48,7 @@ export default function Candidates() {
       offer_accepted: 'bg-green-100 text-green-800',
       candidate_quit: 'bg-gray-100 text-gray-800',
       standby: 'bg-gray-100 text-gray-800',
+      to_be_called: 'bg-blue-100 text-blue-800',
     }
     return colors[status] || 'bg-gray-100 text-gray-800'
   }
