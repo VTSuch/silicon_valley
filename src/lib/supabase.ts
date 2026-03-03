@@ -22,6 +22,7 @@ export type Database = {
           id: string
           job_title: string
           company: string
+          source: 'empty' | 'Upnest' | 'Paraform' | null
           location: string | null
           salary_min: number | null
           salary_max: number | null
@@ -40,6 +41,7 @@ export type Database = {
           id?: string
           job_title: string
           company: string
+          source?: 'empty' | 'Upnest' | 'Paraform' | null
           location?: string | null
           salary_min?: number | null
           salary_max?: number | null
@@ -58,6 +60,7 @@ export type Database = {
           id?: string
           job_title?: string
           company?: string
+          source?: 'empty' | 'Upnest' | 'Paraform' | null
           location?: string | null
           salary_min?: number | null
           salary_max?: number | null
@@ -80,7 +83,7 @@ export type Database = {
           email: string
           linkedin_url: string | null
           role_id: string
-          status: 'cv_rejected' | 'sent_to_agency' | 'sent_to_client' | 'submitted' | 'first_interview' | 'second_interview' | 'third_interview' | 'fourth_interview' | 'final_interview' | 'client_rejected' | 'offer_accepted' | 'candidate_quit' | 'standby'
+          status: 'cv_rejected' | 'submitted' | 'first_interview' | 'second_interview' | 'third_interview' | 'fourth_interview' | 'final_interview' | 'client_rejected' | 'offer_accepted' | 'candidate_quit' | 'standby' | 'to_be_called'
           created_at: string
         }
         Insert: {
@@ -89,7 +92,7 @@ export type Database = {
           email: string
           linkedin_url?: string | null
           role_id: string
-          status?: 'cv_rejected' | 'sent_to_agency' | 'sent_to_client' | 'submitted' | 'first_interview' | 'second_interview' | 'third_interview' | 'fourth_interview' | 'final_interview' | 'client_rejected' | 'offer_accepted' | 'candidate_quit' | 'standby'
+          status?: 'cv_rejected' | 'submitted' | 'first_interview' | 'second_interview' | 'third_interview' | 'fourth_interview' | 'final_interview' | 'client_rejected' | 'offer_accepted' | 'candidate_quit' | 'standby' | 'to_be_called'
           created_at?: string
         }
         Update: {
@@ -98,7 +101,7 @@ export type Database = {
           email?: string
           linkedin_url?: string | null
           role_id?: string
-          status?: 'cv_rejected' | 'sent_to_agency' | 'sent_to_client' | 'submitted' | 'first_interview' | 'second_interview' | 'third_interview' | 'fourth_interview' | 'final_interview' | 'client_rejected' | 'offer_accepted' | 'candidate_quit' | 'standby'
+          status?: 'cv_rejected' | 'submitted' | 'first_interview' | 'second_interview' | 'third_interview' | 'fourth_interview' | 'final_interview' | 'client_rejected' | 'offer_accepted' | 'candidate_quit' | 'standby' | 'to_be_called'
           created_at?: string
         }
       }

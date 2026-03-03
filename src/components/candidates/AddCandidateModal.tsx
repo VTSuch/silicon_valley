@@ -14,8 +14,6 @@ interface AddCandidateModalProps {
 
 const candidateStatuses: CandidateStatus[] = [
   'cv_rejected',
-  'sent_to_agency',
-  'sent_to_client',
   'submitted',
   'first_interview',
   'second_interview',

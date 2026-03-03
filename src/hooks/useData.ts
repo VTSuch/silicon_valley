@@ -39,8 +39,21 @@ export function useDashboard() {
     inInterview: candidates.filter(c => 
       c.status.includes('interview')
     ).length,
-    sentToClient: candidates.filter(c => c.status === 'sent_to_client').length,
-    sentToAgency: candidates.filter(c => c.status === 'sent_to_agency').length,
+    submitted: candidates.filter(c => ['submitted', 'sent_to_agency', 'sent_to_client'].includes(c.status as any)).length,
+    toBeCalled: candidates.filter(c => c.status === 'to_be_called').length,
+    pipelineBounty: candidates
+      .filter(c => [
+        'submitted',
+        'sent_to_agency',
+        'sent_to_client',
+        'first_interview',
+        'second_interview',
+        'third_interview',
+        'fourth_interview',
+        'final_interview',
+        'to_be_called',
+      ].includes(c.status as any))
+      .reduce((sum, c) => sum + (c.role?.bounty ?? 0), 0),
   }
 
   const rolesWithCandidateCount = useMemo(

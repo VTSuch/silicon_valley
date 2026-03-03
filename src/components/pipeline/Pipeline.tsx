@@ -12,8 +12,6 @@ import CandidateCard from './CandidateCard'
 
 const candidateStatuses: CandidateStatus[] = [
   'cv_rejected',
-  'sent_to_agency',
-  'sent_to_client',
   'submitted',
   'first_interview',
   'second_interview',
@@ -30,9 +28,7 @@ const candidateStatuses: CandidateStatus[] = [
 const getStatusColor = (status: CandidateStatus) => {
   const colors: Record<CandidateStatus, string> = {
     cv_rejected: 'bg-red-50 border-red-200',
-    sent_to_agency: 'bg-brand-50 border-brand-200',
-    sent_to_client: 'bg-green-50 border-green-200',
-    submitted: 'bg-brand-50 border-brand-200',
+    submitted: 'bg-green-50 border-green-200',
     first_interview: 'bg-yellow-50 border-yellow-200',
     second_interview: 'bg-orange-50 border-orange-200',
     third_interview: 'bg-purple-50 border-purple-200',

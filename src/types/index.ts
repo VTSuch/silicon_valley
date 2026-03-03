@@ -1,9 +1,9 @@
 export type WorkMode = 'remote' | 'onsite' | 'hybrid'
 
+export type RoleSource = 'empty' | 'Upnest' | 'Paraform'
+
 export type CandidateStatus = 
   | 'cv_rejected'
-  | 'sent_to_agency'
-  | 'sent_to_client'
   | 'submitted'
   | 'first_interview'
   | 'second_interview'
@@ -20,6 +20,7 @@ export interface Role {
   id: string
   job_title: string
   company: string
+  source?: RoleSource
   location?: string
   salary_min?: number
   salary_max?: number

@@ -18,8 +18,6 @@ export default function Candidates() {
 
   const candidateStatuses: CandidateStatus[] = [
     'cv_rejected',
-    'sent_to_agency',
-    'sent_to_client',
     'submitted',
     'first_interview',
     'second_interview',
@@ -36,9 +34,7 @@ export default function Candidates() {
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
       cv_rejected: 'bg-red-100 text-red-800',
-      sent_to_agency: 'bg-brand-100 text-brand-800',
-      sent_to_client: 'bg-green-100 text-green-800',
-      submitted: 'bg-brand-50 text-brand-800',
+      submitted: 'bg-green-100 text-green-800',
       first_interview: 'bg-yellow-100 text-yellow-800',
       second_interview: 'bg-orange-100 text-orange-800',
       third_interview: 'bg-purple-100 text-purple-800',
@@ -50,16 +46,47 @@ export default function Candidates() {
       standby: 'bg-gray-100 text-gray-800',
       to_be_called: 'bg-blue-100 text-blue-800',
     }
+
+    if (status === 'sent_to_agency' || status === 'sent_to_client') {
+      return colors.submitted
+    }
+
     return colors[status] || 'bg-gray-100 text-gray-800'
   }
 
   const formatStatus = (status: string) => {
+    if (status === 'sent_to_agency' || status === 'sent_to_client') return 'Submitted'
     return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
   }
 
   const filteredCandidates = statusFilter.length
-    ? candidates.filter((c) => statusFilter.includes(c.status))
+    ? candidates.filter((c) => {
+        const effectiveStatus =
+          c.status === ('sent_to_agency' as any) || c.status === ('sent_to_client' as any)
+            ? ('submitted' as CandidateStatus)
+            : c.status
+        return statusFilter.includes(effectiveStatus)
+      })
     : candidates
+
+  const getSourcePill = (source?: string) => {
+    if (!source || source === 'empty') return null
+    const cls =
+      source === 'Paraform'
+        ? 'bg-purple-100 text-purple-800'
+        : source === 'Upnest'
+          ? 'bg-orange-100 text-orange-800'
+          : 'bg-gray-100 text-gray-800'
+
+    return (
+      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${cls}`}>{source}</span>
+    )
+  }
+
+  const getRowTint = (source?: string) => {
+    if (source === 'Paraform') return 'bg-purple-50'
+    return ''
+  }
 
   const selectedCandidate = selectedCandidateId
     ? candidates.find((c) => c.id === selectedCandidateId) ?? null
@@ -110,6 +137,9 @@ export default function Candidates() {
                 Company
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Source
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 <div className="flex items-center">
                   <span>Status</span>
                   <StatusFilterDropdown
@@ -129,7 +159,10 @@ export default function Candidates() {
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {filteredCandidates.map((candidate) => (
-              <tr key={candidate.id}>
+              <tr
+                key={candidate.id}
+                className={getRowTint(candidate.role?.source)}
+              >
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
                     <User className="h-5 w-5 text-gray-400 mr-3" />
@@ -152,6 +185,9 @@ export default function Candidates() {
                     <Building className="h-4 w-4 mr-2" />
                     {candidate.role?.company}
                   </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  {getSourcePill(candidate.role?.source)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(candidate.status)}`}>

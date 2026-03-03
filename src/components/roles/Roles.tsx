@@ -53,6 +53,9 @@ export default function Roles() {
                 Company
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Source
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Work Mode
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -76,6 +79,23 @@ export default function Roles() {
                   ? `${role.salary_min ?? '—'} - ${role.salary_max ?? '—'}`
                   : '—'
 
+              const sourcePill =
+                !role.source || role.source === 'empty'
+                  ? '—'
+                  : (
+                      <span
+                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          role.source === 'Paraform'
+                            ? 'bg-green-100 text-green-800'
+                            : role.source === 'Upnest'
+                              ? 'bg-orange-100 text-orange-800'
+                              : 'bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        {role.source}
+                      </span>
+                    )
+
               return (
                 <tr
                   key={role.id}
@@ -94,6 +114,7 @@ export default function Roles() {
                       {role.company}
                     </div>
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{sourcePill}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{role.work_mode}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{salaryText}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{role.bounty ?? '—'}</td>

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useDashboard } from '@/hooks/useData'
-import { Users, Briefcase, CheckCircle, Calendar, Send, Building } from 'lucide-react'
+import { Users, Briefcase, CheckCircle, Calendar, Send, Building, Phone, DollarSign } from 'lucide-react'
 import { CandidateStatus } from '@/types'
 import StatusFilterDropdown from '@/components/common/StatusFilterDropdown'
 
@@ -12,8 +12,6 @@ export default function Dashboard() {
 
   const candidateStatuses: CandidateStatus[] = [
     'cv_rejected',
-    'sent_to_agency',
-    'sent_to_client',
     'submitted',
     'first_interview',
     'second_interview',
@@ -27,24 +25,64 @@ export default function Dashboard() {
     'to_be_called',
   ]
 
+  const getStatusColor = (status: string) => {
+    const colors: Record<string, string> = {
+      cv_rejected: 'bg-red-100 text-red-800',
+      submitted: 'bg-green-100 text-green-800',
+      first_interview: 'bg-yellow-100 text-yellow-800',
+      second_interview: 'bg-orange-100 text-orange-800',
+      third_interview: 'bg-purple-100 text-purple-800',
+      fourth_interview: 'bg-pink-100 text-pink-800',
+      final_interview: 'bg-indigo-100 text-indigo-800',
+      client_rejected: 'bg-red-100 text-red-800',
+      offer_accepted: 'bg-green-100 text-green-800',
+      candidate_quit: 'bg-gray-100 text-gray-800',
+      standby: 'bg-gray-100 text-gray-800',
+      to_be_called: 'bg-blue-100 text-blue-800',
+    }
+
+    if (status === 'sent_to_agency' || status === 'sent_to_client') {
+      return colors.submitted
+    }
+
+    return colors[status] || 'bg-gray-100 text-gray-800'
+  }
+
   const formatStatus = (status: string) => {
+    if (status === 'sent_to_agency' || status === 'sent_to_client') return 'Submitted'
     return status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
   }
 
-  const filteredRecentCandidates = useMemo(() => {
+  const getRowTint = (source?: string) => {
+    if (source === 'Paraform') return 'bg-purple-50'
+    return ''
+  }
+
+  const activeCandidates = useMemo(() => {
+    const activeStatuses = [
+      'submitted',
+      'first_interview',
+      'second_interview',
+      'third_interview',
+      'fourth_interview',
+      'final_interview',
+      'to_be_called',
+    ]
     const filtered = statusFilter.length
       ? candidates.filter((c) => statusFilter.includes(c.status))
       : candidates
-    return filtered.slice(0, 5)
+    return filtered.filter((c) => activeStatuses.includes(c.status)).slice(0, 10)
   }, [candidates, statusFilter])
 
   const kpis = [
     { title: 'Total Candidates', value: stats.totalCandidates, icon: Users, color: 'blue' },
     { title: 'Total Roles', value: stats.totalRoles, icon: Briefcase, color: 'green' },
-    { title: 'Offers Accepted', value: stats.offersAccepted, icon: CheckCircle, color: 'purple' },
     { title: 'In Interview', value: stats.inInterview, icon: Calendar, color: 'orange' },
-    { title: 'Sent to Client', value: stats.sentToClient, icon: Send, color: 'red' },
-    { title: 'Sent to Agency', value: stats.sentToAgency, icon: Building, color: 'indigo' },
+    { title: 'Pipeline Bounty', value: `$${stats.pipelineBounty.toLocaleString()}`, icon: DollarSign, color: 'green' },
+    { title: 'Submitted', value: stats.submitted, icon: Send, color: 'red' },
+    { title: 'To be Called', value: stats.toBeCalled, icon: Phone, color: 'cyan' },
+    { title: 'KPI_PLACEHOLDER', value: '', icon: Users, color: 'blue' },
+    { title: 'Offers Accepted', value: stats.offersAccepted, icon: CheckCircle, color: 'green' },
   ]
 
   const getColorClasses = (color: string) => {
@@ -55,6 +93,8 @@ export default function Dashboard() {
       orange: { bg: 'bg-orange-50', text: 'text-orange-600' },
       red: { bg: 'bg-red-50', text: 'text-red-600' },
       indigo: { bg: 'bg-indigo-50', text: 'text-indigo-600' },
+      cyan: { bg: 'bg-cyan-50', text: 'text-cyan-700' },
+      yellow: { bg: 'bg-yellow-50', text: 'text-yellow-700' },
     }
     return colors[color] || colors.blue
   }
@@ -64,14 +104,22 @@ export default function Dashboard() {
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Dashboard</h1>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+      <div className="relative grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div
+          className="hidden md:block absolute top-0 bottom-0 w-px bg-gray-200"
+          style={{ left: 'calc(75% + 0.25rem)' }}
+        />
         {kpis.map((kpi) => {
+          if (kpi.title === 'KPI_PLACEHOLDER') {
+            return <div key={kpi.title} />
+          }
+
           const Icon = kpi.icon
           const colors = getColorClasses(kpi.color)
           return (
-            <div key={kpi.title} className="bg-white rounded-lg shadow p-6">
+            <div key={kpi.title} className={`bg-white rounded-lg shadow p-4 ${kpi.title === 'Pipeline Bounty' ? 'ring-2 ring-green-700 ring-opacity-60 shadow-lg shadow-green-200' : ''}`}>
               <div className="flex items-center">
-                <div className={`p-3 rounded-lg ${colors.bg}`}>
+                <div className={`p-2 rounded-lg ${colors.bg}`}>
                   <Icon className={`h-6 w-6 ${colors.text}`} />
                 </div>
                 <div className="ml-4">
@@ -85,26 +133,26 @@ export default function Dashboard() {
       </div>
 
       {/* Tables */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Recent Candidates */}
-        <div className="bg-white rounded-lg shadow">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+        {/* Active Candidates */}
+        <div className="bg-white rounded-lg shadow col-span-3">
           <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Recent Candidates</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Active Candidates</h2>
           </div>
-          <div className="overflow-x-auto">
+          <div className="max-h-96 overflow-y-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-32 pl-6 pr-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider truncate">
                     Name
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-24 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider truncate">
                     Role
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-20 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider truncate">
                     Bounty
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
                     <div className="flex items-center">
                       <span>Status</span>
                       <StatusFilterDropdown
@@ -117,19 +165,19 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredRecentCandidates.map((candidate) => (
-                  <tr key={candidate.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                {activeCandidates.map((candidate) => (
+                  <tr key={candidate.id} className={getRowTint(candidate.role?.source)}>
+                    <td className="w-32 pl-6 pr-2 py-4 whitespace-nowrap text-sm font-medium text-gray-900 truncate">
                       {candidate.full_name}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="w-24 px-2 py-4 whitespace-nowrap text-sm text-gray-500 truncate">
                       {candidate.role?.job_title}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="w-20 px-2 py-4 whitespace-nowrap text-sm text-gray-500 truncate">
                       {candidate.role?.bounty ?? '—'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                    <td className="px-2 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(candidate.status)}`}>
                         {formatStatus(candidate.status)}
                       </span>
                     </td>
@@ -141,35 +189,35 @@ export default function Dashboard() {
         </div>
 
         {/* Roles with Candidate Count */}
-        <div className="bg-white rounded-lg shadow">
+        <div className="bg-white rounded-lg shadow col-span-2">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900">Roles</h2>
           </div>
-          <div className="overflow-x-auto">
+          <div className="max-h-96 overflow-y-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-28 pl-6 pr-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider truncate">
                     Job Title
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-24 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider truncate">
                     Company
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Candidates
+                  <th className="w-12 px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider truncate">
+                    NUM.
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {rolesWithCandidateCount.slice(0, 5).map((role) => (
-                  <tr key={role.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                {rolesWithCandidateCount.slice(0, 10).map((role) => (
+                  <tr key={role.id} className={getRowTint(role.source)}>
+                    <td className="w-28 pl-6 pr-2 py-4 whitespace-nowrap text-sm font-medium text-gray-900 truncate">
                       {role.job_title}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="w-24 px-2 py-4 whitespace-nowrap text-sm text-gray-500 truncate">
                       {role.company}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="w-12 px-2 py-4 whitespace-nowrap text-sm text-gray-500 text-center truncate">
                       {role.candidateCount}
                     </td>
                   </tr>
