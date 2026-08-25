@@ -1,246 +1,209 @@
 'use client'
 
-import { useState } from 'react'
-import { useCandidates, useRoles } from '@/hooks/useData'
-import { Plus, User, Building, Mail, ExternalLink, Pencil } from 'lucide-react'
-import AddCandidateModal from './AddCandidateModal'
-import EditCandidateModal from './EditCandidateModal'
+import { useMemo, useState } from 'react'
+import { AlertTriangle, Check, ChevronDown, Plus, Search } from 'lucide-react'
+import { useJourneys } from '@/hooks/useData'
+import { useUI } from '@/context/UIContext'
+import { StatusBadge, SourcePill } from '@/components/common/StatusBadge'
+import DateRangePills, { RangeSelection, defaultSelection } from '@/components/common/DateRangePills'
+import StatusFilter from '@/components/common/StatusFilter'
+import { formatDate, inRange, relativeAgo, relativeDays } from '@/lib/dates'
 import { CandidateStatus } from '@/types'
-import StatusFilterDropdown from '@/components/common/StatusFilterDropdown'
 
-export default function Candidates() {
-  const { candidates, loading, updateCandidate } = useCandidates()
-  const { roles } = useRoles()
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null)
-  const [statusFilter, setStatusFilter] = useState<CandidateStatus[]>([])
+type SortKey = 'recent' | 'stale' | 'name' | 'bounty'
 
-  const candidateStatuses: CandidateStatus[] = [
-    'cv_rejected',
-    'submitted',
-    'first_interview',
-    'second_interview',
-    'third_interview',
-    'fourth_interview',
-    'final_interview',
-    'client_rejected',
-    'offer_accepted',
-    'candidate_quit',
-    'standby',
-    'to_be_called',
-  ]
+const SORTS: { id: SortKey; label: string }[] = [
+  { id: 'recent', label: 'Last update' },
+  { id: 'stale', label: 'Longest in stage' },
+  { id: 'bounty', label: 'Highest bounty' },
+  { id: 'name', label: 'Name' },
+]
 
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      cv_rejected: 'bg-red-100 text-red-800',
-      submitted: 'bg-green-100 text-green-800',
-      first_interview: 'bg-yellow-100 text-yellow-800',
-      second_interview: 'bg-orange-100 text-orange-800',
-      third_interview: 'bg-purple-100 text-purple-800',
-      fourth_interview: 'bg-pink-100 text-pink-800',
-      final_interview: 'bg-indigo-100 text-indigo-800',
-      client_rejected: 'bg-red-100 text-red-800',
-      offer_accepted: 'bg-green-100 text-green-800',
-      candidate_quit: 'bg-gray-100 text-gray-800',
-      standby: 'bg-gray-100 text-gray-800',
-      to_be_called: 'bg-blue-100 text-blue-800',
-    }
+export default function Candidates({ onAdd }: { onAdd: () => void }) {
+  const journeys = useJourneys()
+  const { openCandidate } = useUI()
+  const [query, setQuery] = useState('')
+  const [statuses, setStatuses] = useState<CandidateStatus[]>([])
+  const [range, setRange] = useState<RangeSelection>(defaultSelection)
+  const [sort, setSort] = useState<SortKey>('recent')
+  const [sortOpen, setSortOpen] = useState(false)
 
-    if (status === 'sent_to_agency' || status === 'sent_to_client') {
-      return colors.submitted
-    }
+  const rows = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    let out = journeys.filter((j) => {
+      if (statuses.length && !statuses.includes(j.status)) return false
+      if (range.range.from || range.range.to) {
+        if (!inRange(j.candidate.created_at, range.range)) return false
+      }
+      if (!q) return true
+      return (
+        j.candidate.full_name.toLowerCase().includes(q) ||
+        j.candidate.email.toLowerCase().includes(q) ||
+        (j.candidate.role?.job_title ?? '').toLowerCase().includes(q) ||
+        (j.candidate.role?.company ?? '').toLowerCase().includes(q)
+      )
+    })
 
-    return colors[status] || 'bg-gray-100 text-gray-800'
-  }
-
-  const formatStatus = (status: string) => {
-    if (status === 'sent_to_agency' || status === 'sent_to_client') return 'Submitted'
-    return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-  }
-
-  const filteredCandidates = statusFilter.length
-    ? candidates.filter((c) => {
-        const effectiveStatus =
-          c.status === ('sent_to_agency' as any) || c.status === ('sent_to_client' as any)
-            ? ('submitted' as CandidateStatus)
-            : c.status
-        return statusFilter.includes(effectiveStatus)
-      })
-    : candidates
-
-  const getSourcePill = (source?: string) => {
-    if (!source || source === 'empty') return null
-    const cls =
-      source === 'Paraform'
-        ? 'bg-purple-100 text-purple-800'
-        : source === 'Upnest'
-          ? 'bg-orange-100 text-orange-800'
-          : 'bg-gray-100 text-gray-800'
-
-    return (
-      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${cls}`}>{source}</span>
-    )
-  }
-
-  const getRowTint = (source?: string) => {
-    if (source === 'Paraform') return 'bg-purple-50'
-    return ''
-  }
-
-  const selectedCandidate = selectedCandidateId
-    ? candidates.find((c) => c.id === selectedCandidateId) ?? null
-    : null
-
-  const openEdit = (candidateId: string) => {
-    setSelectedCandidateId(candidateId)
-    setIsEditModalOpen(true)
-  }
-
-  if (loading) {
-    return (
-      <div className="p-8">
-        <div className="text-center text-gray-600">Loading candidates...</div>
-      </div>
-    )
-  }
+    out = [...out].sort((a, b) => {
+      switch (sort) {
+        case 'name':
+          return a.candidate.full_name.localeCompare(b.candidate.full_name)
+        case 'bounty':
+          return b.bounty - a.bounty
+        case 'stale':
+          return b.daysInStatus - a.daysInStatus
+        default:
+          return b.since.getTime() - a.since.getTime()
+      }
+    })
+    return out
+  }, [journeys, query, statuses, range, sort])
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Candidates</h1>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-zinc-900">Candidates</h1>
+          <p className="text-sm text-zinc-500">
+            {rows.length} of {journeys.length} — click any row to update the stage.
+          </p>
+        </div>
         <button
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center px-4 py-2 bg-brand-600 text-white rounded-md hover:bg-brand-700 transition-colors"
+          onClick={onAdd}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-zinc-700"
         >
-          <Plus className="h-5 w-5 mr-2" />
-          Add Candidate
+          <Plus className="h-4 w-4" />
+          Add candidate
         </button>
       </div>
 
-      <div className="mb-4">
-        <div className="text-sm text-gray-600">Use the Status header filter to narrow results.</div>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[220px] flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search name, email, role or company…"
+            className="w-full rounded-lg border border-zinc-200 bg-white py-2 pl-9 pr-3 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-zinc-400"
+          />
+        </div>
+
+        <StatusFilter value={statuses} onChange={setStatuses} />
+
+        <div className="relative">
+          <button
+            onClick={() => setSortOpen((v) => !v)}
+            onBlur={() => setTimeout(() => setSortOpen(false), 150)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+          >
+            {SORTS.find((s) => s.id === sort)?.label}
+            <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
+          </button>
+          {sortOpen && (
+            <div className="sv-fade-in absolute right-0 z-40 mt-1 w-48 rounded-xl border border-zinc-200 bg-white p-1.5 shadow-lg">
+              {SORTS.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => {
+                    setSort(s.id)
+                    setSortOpen(false)
+                  }}
+                  className={`block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-50 ${
+                    sort === s.id ? 'font-medium text-zinc-900' : 'text-zinc-600'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <DateRangePills value={range} onChange={setRange} />
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Name
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Role
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Company
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Source
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                <div className="flex items-center">
-                  <span>Status</span>
-                  <StatusFilterDropdown
-                    value={statusFilter}
-                    onChange={setStatusFilter}
-                    options={candidateStatuses}
-                  />
-                </div>
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Created
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {filteredCandidates.map((candidate) => (
-              <tr
-                key={candidate.id}
-                className={getRowTint(candidate.role?.source)}
-              >
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <User className="h-5 w-5 text-gray-400 mr-3" />
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {candidate.full_name}
-                      </div>
-                      <div className="text-sm text-gray-500 flex items-center">
-                        <Mail className="h-3 w-3 mr-1" />
-                        {candidate.email}
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {candidate.role?.job_title}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <div className="flex items-center">
-                    <Building className="h-4 w-4 mr-2" />
-                    {candidate.role?.company}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {getSourcePill(candidate.role?.source)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(candidate.status)}`}>
-                    {formatStatus(candidate.status)}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {new Date(candidate.created_at).toLocaleDateString()}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(candidate.id)}
-                      className="inline-flex items-center gap-1 text-brand-700 hover:text-brand-800"
-                    >
-                      <Pencil className="h-4 w-4" />
-                      Edit
-                    </button>
-                    {candidate.linkedin_url && (
-                      <a
-                        href={candidate.linkedin_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-gray-600 hover:text-gray-900 inline-flex items-center"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    )}
-                  </div>
-                </td>
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-zinc-200 bg-zinc-50/70 text-left text-xs font-medium text-zinc-500">
+                <th className="px-4 py-2.5">Candidate</th>
+                <th className="px-4 py-2.5">Role</th>
+                <th className="px-4 py-2.5">Source</th>
+                <th className="px-4 py-2.5">Stage</th>
+                <th className="px-4 py-2.5">In stage</th>
+                <th className="px-4 py-2.5 text-right">Bounty</th>
+                <th className="px-4 py-2.5">Added</th>
               </tr>
-            ))}
-          </tbody>
+            </thead>
+            <tbody className="divide-y divide-zinc-100">
+              {rows.map((j) => (
+                <tr
+                  key={j.candidate.id}
+                  onClick={() => openCandidate(j.candidate.id)}
+                  className="cursor-pointer transition-colors hover:bg-zinc-50"
+                >
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-zinc-900">{j.candidate.full_name}</div>
+                    <div className="text-xs text-zinc-400">{j.candidate.email}</div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="text-zinc-800">{j.candidate.role?.job_title ?? '—'}</div>
+                    <div className="text-xs text-zinc-400">{j.candidate.role?.company}</div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <SourcePill source={j.candidate.role?.source} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <StatusBadge status={j.status} />
+                  </td>
+                  <td className="px-4 py-3">
+                    {j.active ? (
+                      <span
+                        className={`inline-flex items-center gap-1 text-xs ${
+                          j.stale
+                            ? j.daysSinceFollowUp !== null
+                              ? 'font-medium text-emerald-600'
+                              : 'font-medium text-amber-600'
+                            : 'text-zinc-500'
+                        }`}
+                        title={
+                          j.daysSinceFollowUp !== null
+                            ? `Followed up ${relativeAgo(j.daysSinceFollowUp)}`
+                            : undefined
+                        }
+                      >
+                        {j.stale &&
+                          (j.daysSinceFollowUp !== null ? (
+                            <Check className="h-3 w-3" />
+                          ) : (
+                            <AlertTriangle className="h-3 w-3" />
+                          ))}
+                        {relativeDays(j.daysInStatus)}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-zinc-300">closed</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums text-zinc-600">
+                    {j.bounty ? `$${j.bounty.toLocaleString()}` : '—'}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs text-zinc-500">
+                    {formatDate(j.candidate.created_at)}
+                  </td>
+                </tr>
+              ))}
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-12 text-center text-sm text-zinc-400">
+                    No candidates match these filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
           </table>
         </div>
       </div>
-
-      <AddCandidateModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        roles={roles}
-      />
-
-      <EditCandidateModal
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        candidate={selectedCandidate}
-        roles={roles}
-        onSave={async (candidateId, updates) => {
-          await updateCandidate(candidateId, updates)
-        }}
-      />
     </div>
   )
 }

@@ -1,145 +1,142 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { Plus, Search } from 'lucide-react'
 import { useRoles } from '@/hooks/useData'
-import { Role } from '@/types'
-import { Briefcase, Building, Calendar, Plus } from 'lucide-react'
-import RoleDetailModal from './RoleDetailModal'
-import AddRoleModal from './AddRoleModal'
+import { useJourneys } from '@/hooks/useData'
+import { useUI } from '@/context/UIContext'
+import { SourcePill } from '@/components/common/StatusBadge'
+import { formatDate } from '@/lib/dates'
 
-export default function Roles() {
-  const { roles, loading } = useRoles()
-  const [selectedRole, setSelectedRole] = useState<Role | null>(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+const WORK_MODE: Record<string, string> = {
+  remote: 'Remote',
+  onsite: 'Onsite',
+  hybrid: 'Hybrid',
+}
 
-  const openRole = (role: Role) => {
-    setSelectedRole(role)
-    setIsModalOpen(true)
-  }
+export default function Roles({ onAdd }: { onAdd: () => void }) {
+  const { rolesWithCount } = useRoles()
+  const journeys = useJourneys()
+  const { openRole } = useUI()
+  const [query, setQuery] = useState('')
 
-  const rows = useMemo(() => roles, [roles])
+  const activeByRole = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const j of journeys) {
+      if (!j.active) continue
+      map.set(j.candidate.role_id, (map.get(j.candidate.role_id) ?? 0) + 1)
+    }
+    return map
+  }, [journeys])
 
-  if (loading) {
-    return (
-      <div className="p-8">
-        <div className="text-center text-gray-600">Loading roles...</div>
-      </div>
+  const rows = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return rolesWithCount
+    return rolesWithCount.filter(
+      (r) =>
+        r.job_title.toLowerCase().includes(q) ||
+        r.company.toLowerCase().includes(q) ||
+        (r.location ?? '').toLowerCase().includes(q)
     )
+  }, [rolesWithCount, query])
+
+  const salary = (min?: number, max?: number) => {
+    if (!min && !max) return '—'
+    const f = (n?: number) => (n ? `$${Math.round(n / 1000)}k` : '?')
+    return `${f(min)} – ${f(max)}`
   }
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Roles</h1>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-zinc-900">Roles</h1>
+          <p className="text-sm text-zinc-500">{rows.length} open roles</p>
+        </div>
         <button
-          onClick={() => setIsAddModalOpen(true)}
-          className="flex items-center px-4 py-2 bg-brand-600 text-white rounded-md hover:bg-brand-700 transition-colors"
+          onClick={onAdd}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-zinc-700"
         >
-          <Plus className="h-5 w-5 mr-2" />
-          Add Role
+          <Plus className="h-4 w-4" />
+          Add role
         </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="relative max-w-sm">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search role, company or location…"
+          className="w-full rounded-lg border border-zinc-200 bg-white py-2 pl-9 pr-3 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-zinc-400"
+        />
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Job Title
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Company
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Source
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Work Mode
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Salary
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Bounty
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Description
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Created
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {rows.map((role) => {
-              const salaryText =
-                role.salary_min || role.salary_max
-                  ? `${role.salary_min ?? '—'} - ${role.salary_max ?? '—'}`
-                  : '—'
-
-              const sourcePill =
-                !role.source || role.source === 'empty'
-                  ? '—'
-                  : (
-                      <span
-                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          role.source === 'Paraform'
-                            ? 'bg-green-100 text-green-800'
-                            : role.source === 'Upnest'
-                              ? 'bg-orange-100 text-orange-800'
-                              : 'bg-gray-100 text-gray-800'
-                        }`}
-                      >
-                        {role.source}
-                      </span>
-                    )
-
-              return (
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-zinc-200 bg-zinc-50/70 text-left text-xs font-medium text-zinc-500">
+                <th className="px-4 py-2.5">Role</th>
+                <th className="px-4 py-2.5">Source</th>
+                <th className="px-4 py-2.5">Location</th>
+                <th className="px-4 py-2.5">Mode</th>
+                <th className="px-4 py-2.5">Salary</th>
+                <th className="px-4 py-2.5 text-right">Bounty</th>
+                <th className="px-4 py-2.5 text-center">Candidates</th>
+                <th className="px-4 py-2.5">Added</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100">
+              {rows.map((role) => (
                 <tr
                   key={role.id}
-                  onClick={() => openRole(role)}
-                  className="hover:bg-gray-50 cursor-pointer"
+                  onClick={() => openRole(role.id)}
+                  className="cursor-pointer transition-colors hover:bg-zinc-50"
                 >
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <Briefcase className="h-5 w-5 text-gray-400 mr-3" />
-                      <div className="text-sm font-medium text-gray-900">{role.job_title}</div>
-                    </div>
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-zinc-900">{role.job_title}</div>
+                    <div className="text-xs text-zinc-400">{role.company}</div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    <div className="flex items-center">
-                      <Building className="h-4 w-4 text-gray-400 mr-2" />
-                      {role.company}
-                    </div>
+                  <td className="px-4 py-3">
+                    <SourcePill source={role.source} />
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{sourcePill}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{role.work_mode}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{salaryText}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{role.bounty ?? '—'}</td>
-                  <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">{role.description || '—'}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <div className="flex items-center">
-                      <Calendar className="h-4 w-4 text-gray-400 mr-2" />
-                      {new Date(role.created_at).toLocaleDateString()}
-                    </div>
+                  <td className="px-4 py-3 text-zinc-600">{role.location || '—'}</td>
+                  <td className="px-4 py-3 text-zinc-600">
+                    {WORK_MODE[role.work_mode] ?? role.work_mode}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap tabular-nums text-zinc-600">
+                    {salary(role.salary_min, role.salary_max)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums font-medium text-zinc-900">
+                    {role.bounty ? `$${role.bounty.toLocaleString()}` : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
+                      <span className="font-medium text-zinc-900">{role.candidateCount}</span>
+                      {(activeByRole.get(role.id) ?? 0) > 0 && (
+                        <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                          {activeByRole.get(role.id)} live
+                        </span>
+                      )}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs text-zinc-500">
+                    {formatDate(role.created_at)}
                   </td>
                 </tr>
-              )
-            })}
-          </tbody>
+              ))}
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-12 text-center text-sm text-zinc-400">
+                    No roles yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
           </table>
         </div>
       </div>
-
-      <RoleDetailModal
-        role={selectedRole}
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-      />
-
-      <AddRoleModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} />
     </div>
   )
 }

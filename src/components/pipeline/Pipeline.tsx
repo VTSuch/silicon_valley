@@ -1,151 +1,235 @@
 'use client'
 
-import { useState } from 'react'
-import { DndContext, DragEndEvent, DragStartEvent, 
-  closestCenter, DragOverlay, useSensor, useSensors, 
-  PointerSensor } from '@dnd-kit/core'
-import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import { useCandidates } from '@/hooks/useData'
-import { CandidateStatus, CandidateWithRole } from '@/types'
-import { Building, User } from 'lucide-react'
-import CandidateCard from './CandidateCard'
-
-const candidateStatuses: CandidateStatus[] = [
-  'cv_rejected',
-  'submitted',
-  'first_interview',
-  'second_interview',
-  'third_interview',
-  'fourth_interview',
-  'final_interview',
-  'client_rejected',
-  'offer_accepted',
-  'candidate_quit',
-  'standby',
-  'to_be_called',
-]
-
-const getStatusColor = (status: CandidateStatus) => {
-  const colors: Record<CandidateStatus, string> = {
-    cv_rejected: 'bg-red-50 border-red-200',
-    submitted: 'bg-green-50 border-green-200',
-    first_interview: 'bg-yellow-50 border-yellow-200',
-    second_interview: 'bg-orange-50 border-orange-200',
-    third_interview: 'bg-purple-50 border-purple-200',
-    fourth_interview: 'bg-pink-50 border-pink-200',
-    final_interview: 'bg-indigo-50 border-indigo-200',
-    client_rejected: 'bg-red-50 border-red-200',
-    offer_accepted: 'bg-green-50 border-green-200',
-    candidate_quit: 'bg-gray-50 border-gray-200',
-    standby: 'bg-gray-50 border-gray-200',
-    to_be_called: 'bg-blue-50 border-blue-200',
-  }
-  return colors[status]
-}
-
-const formatStatus = (status: string) => {
-  return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-}
+import { useMemo, useState } from 'react'
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  pointerWithin,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import { AlertTriangle, Check, Search } from 'lucide-react'
+import { useData } from '@/context/DataContext'
+import { useJourneys } from '@/hooks/useData'
+import { useUI } from '@/context/UIContext'
+import { Journey } from '@/lib/journey'
+import { BOARD_COLUMNS, BoardColumn, PIPELINE_STATUSES, midStep } from '@/lib/status'
+import { relativeAgo, relativeDays, toDateInput, fromDateInput } from '@/lib/dates'
+import DateInput from '@/components/common/DateInput'
 
 export default function Pipeline() {
-  const { candidates, updateCandidateStatus } = useCandidates()
-  const [activeId, setActiveId] = useState<string | null>(null)
+  const journeys = useJourneys()
+  const { setStatus } = useData()
+  const { openCandidate } = useUI()
+  const [dragging, setDragging] = useState<Journey | null>(null)
+  const [query, setQuery] = useState('')
+  const [moveDate, setMoveDate] = useState(() => toDateInput(new Date()))
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
+
+  const columns = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    const visible = journeys.filter((j) => {
+      if (!PIPELINE_STATUSES.includes(j.status)) return false
+      if (!q) return true
+      return (
+        j.candidate.full_name.toLowerCase().includes(q) ||
+        (j.candidate.role?.company ?? '').toLowerCase().includes(q) ||
+        (j.candidate.role?.job_title ?? '').toLowerCase().includes(q)
+      )
     })
-  )
+    return BOARD_COLUMNS.map((column) => ({
+      column,
+      items: visible
+        .filter((j) => column.statuses.includes(j.status))
+        .sort((a, b) => b.daysInStatus - a.daysInStatus),
+    }))
+  }, [journeys, query])
 
-  const candidatesByStatus = candidateStatuses.reduce((acc, status) => {
-    acc[status] = candidates.filter(c => c.status === status)
-    return acc
-  }, {} as Record<CandidateStatus, CandidateWithRole[]>)
-
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string)
+  const onDragEnd = async (event: DragEndEvent) => {
+    setDragging(null)
+    const columnId = event.over?.id as string | undefined
+    const id = event.active.id as string
+    if (!columnId) return
+    const column = BOARD_COLUMNS.find((c) => c.id === columnId)
+    const journey = journeys.find((j) => j.candidate.id === id)
+    if (!column || !journey) return
+    // Dropping into the column a card already sits in is a no-op — moving
+    // between mid steps happens in the candidate panel.
+    if (column.statuses.includes(journey.status)) return
+    await setStatus(id, column.entry, fromDateInput(moveDate))
   }
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event
-
-    if (!over) return
-
-    const candidateId = active.id as string
-    const newStatus = over.id as CandidateStatus
-
-    const candidate = candidates.find(c => c.id === candidateId)
-    if (!candidate || candidate.status === newStatus) return
-
-    try {
-      await updateCandidateStatus(candidateId, newStatus)
-    } catch (error) {
-      console.error('Error updating candidate status:', error)
-    }
-
-    setActiveId(null)
+  const onDragStart = (event: DragStartEvent) => {
+    setDragging(journeys.find((j) => j.candidate.id === event.active.id) ?? null)
   }
-
-  const activeCandidate = candidates.find(c => c.id === activeId)
 
   return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Pipeline</h1>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-zinc-900">Pipeline</h1>
+          <p className="text-sm text-zinc-500">
+            Drag a card to move a stage — the date below is what gets recorded.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search…"
+              className="w-48 rounded-lg border border-zinc-200 bg-white py-2 pl-9 pr-3 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-zinc-400"
+            />
+          </div>
+          <label className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-500">
+            Moves dated
+            <DateInput
+              eager
+              value={moveDate}
+              onChange={setMoveDate}
+              className="text-xs font-medium text-zinc-900 outline-none"
+            />
+          </label>
+        </div>
+      </div>
 
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
+        collisionDetection={pointerWithin}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
       >
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
-          {candidateStatuses.map((status) => (
-            <div key={status} className={`min-h-[400px] ${getStatusColor(status)} border rounded-lg p-4`}>
-              <h3 className="font-semibold text-gray-900 mb-4">
-                {formatStatus(status)}
-                <span className="ml-2 text-sm text-gray-500">
-                  ({candidatesByStatus[status].length})
-                </span>
-              </h3>
-              
-              <SortableContext
-                id={status}
-                items={candidatesByStatus[status].map(c => c.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                <div className="space-y-2 min-h-[300px]">
-                  {candidatesByStatus[status].map((candidate) => (
-                    <CandidateCard
-                      key={candidate.id}
-                      candidate={candidate}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </div>
+        <div className="flex gap-3 overflow-x-auto pb-4">
+          {columns.map((col) => (
+            <Column
+              key={col.column.id}
+              column={col.column}
+              items={col.items}
+              onOpen={openCandidate}
+            />
           ))}
         </div>
 
         <DragOverlay>
-          {activeCandidate ? (
-            <div className="bg-white border rounded-lg p-4 shadow-lg opacity-90">
-              <div className="flex items-center space-x-3">
-                <User className="h-5 w-5 text-gray-400" />
-                <div>
-                  <div className="font-medium text-gray-900">
-                    {activeCandidate.full_name}
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    {activeCandidate.role?.job_title}
-                  </div>
-                </div>
+          {dragging ? (
+            <div className="w-64 rotate-2 rounded-xl border border-zinc-300 bg-white p-3 shadow-xl">
+              <div className="text-sm font-medium text-zinc-900">
+                {dragging.candidate.full_name}
               </div>
+              <div className="text-xs text-zinc-500">{dragging.candidate.role?.company}</div>
             </div>
           ) : null}
         </DragOverlay>
       </DndContext>
+    </div>
+  )
+}
+
+function Column({
+  column,
+  items,
+  onOpen,
+}: {
+  column: BoardColumn
+  items: Journey[]
+  onOpen: (id: string) => void
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: column.id })
+  const value = items.reduce((sum, j) => sum + j.bounty, 0)
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex w-64 shrink-0 flex-col rounded-xl border transition-colors ${
+        isOver ? 'border-zinc-900 bg-zinc-100' : 'border-zinc-200 bg-zinc-100/60'
+      }`}
+    >
+      <div className="flex items-center gap-2 px-3 pb-2 pt-3">
+        <span className={`h-2 w-2 rounded-full ${column.color}`} />
+        <span className="text-sm font-medium text-zinc-800">{column.label}</span>
+        <span className="ml-auto rounded-full bg-white px-1.5 py-0.5 text-xs font-medium text-zinc-500">
+          {items.length}
+        </span>
+      </div>
+      {value > 0 && (
+        <div className="px-3 pb-2 text-[11px] tabular-nums text-zinc-400">
+          ${value.toLocaleString()} in play
+        </div>
+      )}
+
+      <div className="flex max-h-[calc(100vh-16rem)] min-h-24 flex-1 flex-col gap-2 overflow-y-auto p-2 pt-0">
+        {items.map((j) => (
+          <Card key={j.candidate.id} journey={j} onOpen={onOpen} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function Card({ journey, onOpen }: { journey: Journey; onOpen: (id: string) => void }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: journey.candidate.id,
+  })
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      onClick={() => onOpen(journey.candidate.id)}
+      className={`cursor-grab rounded-xl border border-zinc-200 bg-white p-3 text-left shadow-sm transition hover:border-zinc-300 hover:shadow ${
+        isDragging ? 'opacity-30' : ''
+      }`}
+    >
+      <div className="truncate text-sm font-medium text-zinc-900">
+        {journey.candidate.full_name}
+      </div>
+      <div className="mt-0.5 flex items-center gap-1.5">
+        <span className="min-w-0 flex-1 truncate text-xs text-zinc-500">
+          {journey.candidate.role?.job_title}
+        </span>
+        {midStep(journey.status) > 0 && (
+          <span className="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+            Mid {midStep(journey.status)}
+          </span>
+        )}
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <span
+          className={`inline-flex items-center gap-1 text-[11px] ${
+            journey.stale
+              ? journey.daysSinceFollowUp !== null
+                ? 'font-medium text-emerald-600'
+                : 'font-medium text-amber-600'
+              : 'text-zinc-400'
+          }`}
+          title={
+            journey.daysSinceFollowUp !== null
+              ? `Followed up ${relativeAgo(journey.daysSinceFollowUp)}`
+              : undefined
+          }
+        >
+          {journey.stale &&
+            (journey.daysSinceFollowUp !== null ? (
+              <Check className="h-3 w-3" />
+            ) : (
+              <AlertTriangle className="h-3 w-3" />
+            ))}
+          {relativeDays(journey.daysInStatus)}
+        </span>
+        {journey.bounty > 0 && (
+          <span className="text-[11px] tabular-nums text-zinc-500">
+            ${journey.bounty.toLocaleString()}
+          </span>
+        )}
+      </div>
     </div>
   )
 }

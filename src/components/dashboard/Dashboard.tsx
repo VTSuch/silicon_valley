@@ -1,232 +1,326 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { useDashboard } from '@/hooks/useData'
-import { Users, Briefcase, CheckCircle, Calendar, Send, Building, Phone, DollarSign } from 'lucide-react'
-import { CandidateStatus } from '@/types'
-import StatusFilterDropdown from '@/components/common/StatusFilterDropdown'
+import {
+  ArrowRight,
+  Bell,
+  BellRing,
+  Briefcase,
+  Check,
+  CircleDollarSign,
+  Handshake,
+  Send,
+  Settings2,
+  Users,
+} from 'lucide-react'
+import { useJourneys, useRoles } from '@/hooks/useData'
+import { useData } from '@/context/DataContext'
+import { useUI } from '@/context/UIContext'
+import DateRangePills, { RangeSelection, defaultSelection } from '@/components/common/DateRangePills'
+import { StatusBadge, SourcePill } from '@/components/common/StatusBadge'
+import { inRange, relativeAgo, relativeDays } from '@/lib/dates'
+import { statusMeta } from '@/lib/status'
+import FollowUpSettings from './FollowUpSettings'
 
 export default function Dashboard() {
-  const { stats, rolesWithCandidateCount, candidates } = useDashboard()
-  const [statusFilter, setStatusFilter] = useState<CandidateStatus[]>([])
+  const journeys = useJourneys()
+  const { rolesWithCount } = useRoles()
+  const { openCandidate, openRole, setTab } = useUI()
+  const { logFollowUp } = useData()
+  const [range, setRange] = useState<RangeSelection>(defaultSelection)
+  const [rulesOpen, setRulesOpen] = useState(false)
 
-  const candidateStatuses: CandidateStatus[] = [
-    'cv_rejected',
-    'submitted',
-    'first_interview',
-    'second_interview',
-    'third_interview',
-    'fourth_interview',
-    'final_interview',
-    'client_rejected',
-    'offer_accepted',
-    'candidate_quit',
-    'standby',
-    'to_be_called',
-  ]
+  /** The range filters the cohort by when the candidate entered the pipeline. */
+  const cohort = useMemo(() => {
+    if (!range.range.from && !range.range.to) return journeys
+    return journeys.filter((j) =>
+      inRange(j.submittedAt ?? new Date(j.candidate.created_at), range.range)
+    )
+  }, [journeys, range])
 
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      cv_rejected: 'bg-red-100 text-red-800',
-      submitted: 'bg-green-100 text-green-800',
-      first_interview: 'bg-yellow-100 text-yellow-800',
-      second_interview: 'bg-orange-100 text-orange-800',
-      third_interview: 'bg-purple-100 text-purple-800',
-      fourth_interview: 'bg-pink-100 text-pink-800',
-      final_interview: 'bg-indigo-100 text-indigo-800',
-      client_rejected: 'bg-red-100 text-red-800',
-      offer_accepted: 'bg-green-100 text-green-800',
-      candidate_quit: 'bg-gray-100 text-gray-800',
-      standby: 'bg-gray-100 text-gray-800',
-      to_be_called: 'bg-blue-100 text-blue-800',
+  const stats = useMemo(() => {
+    const active = cohort.filter((j) => j.active)
+    const submitted = cohort.filter((j) => j.submittedAt)
+    const interviewing = cohort.filter((j) =>
+      ['first', 'mid', 'final'].includes(statusMeta(j.status).group)
+    )
+    const offers = cohort.filter((j) => statusMeta(j.status).group === 'offer')
+    const hires = cohort.filter((j) => j.status === 'offer_accepted')
+    const live = journeys.filter((j) => j.active && j.submittedAt)
+
+    return {
+      active: active.length,
+      submitted: submitted.length,
+      interviewing: interviewing.length,
+      offers: offers.length,
+      hires: hires.length,
+      hireValue: hires.reduce((s, j) => s + j.bounty, 0),
+      liveValue: live.reduce((s, j) => s + j.bounty, 0),
+      liveCount: live.length,
     }
+  }, [cohort, journeys])
 
-    if (status === 'sent_to_agency' || status === 'sent_to_client') {
-      return colors.submitted
-    }
+  const alerts = useMemo(
+    () =>
+      journeys
+        .filter((j) => j.stale)
+        .sort((a, b) => {
+          // Already chased drops to the bottom, then most overdue first.
+          const chased = (x: typeof a) => (x.daysSinceFollowUp === null ? -1 : x.daysSinceFollowUp)
+          if ((chased(a) >= 0) !== (chased(b) >= 0)) return chased(a) >= 0 ? 1 : -1
+          if (chased(a) >= 0 && chased(b) >= 0) return chased(b) - chased(a)
+          const overdue = (x: typeof a) => x.daysInStatus - (x.limit ?? 0)
+          return overdue(b) - overdue(a)
+        }),
+    [journeys]
+  )
 
-    return colors[status] || 'bg-gray-100 text-gray-800'
-  }
+  const activeList = useMemo(
+    () =>
+      cohort
+        .filter((j) => j.active)
+        .sort((a, b) => statusMeta(b.status).rank - statusMeta(a.status).rank || b.bounty - a.bounty),
+    [cohort]
+  )
 
-  const formatStatus = (status: string) => {
-    if (status === 'sent_to_agency' || status === 'sent_to_client') return 'Submitted'
-    return status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
-  }
-
-  const getRowTint = (source?: string) => {
-    if (source === 'Paraform') return 'bg-purple-50'
-    return ''
-  }
-
-  const activeCandidates = useMemo(() => {
-    const activeStatuses = [
-      'submitted',
-      'first_interview',
-      'second_interview',
-      'third_interview',
-      'fourth_interview',
-      'final_interview',
-      'to_be_called',
-    ]
-    const filtered = statusFilter.length
-      ? candidates.filter((c) => statusFilter.includes(c.status))
-      : candidates
-    return filtered.filter((c) => activeStatuses.includes(c.status)).slice(0, 10)
-  }, [candidates, statusFilter])
-
-  const kpis = [
-    { title: 'Total Candidates', value: stats.totalCandidates, icon: Users, color: 'blue' },
-    { title: 'Total Roles', value: stats.totalRoles, icon: Briefcase, color: 'green' },
-    { title: 'In Interview', value: stats.inInterview, icon: Calendar, color: 'orange' },
-    { title: 'Pipeline Bounty', value: `$${stats.pipelineBounty.toLocaleString()}`, icon: DollarSign, color: 'green' },
-    { title: 'Submitted', value: stats.submitted, icon: Send, color: 'red' },
-    { title: 'To be Called', value: stats.toBeCalled, icon: Phone, color: 'cyan' },
-    { title: 'KPI_PLACEHOLDER', value: '', icon: Users, color: 'blue' },
-    { title: 'Offers Accepted', value: stats.offersAccepted, icon: CheckCircle, color: 'green' },
-  ]
-
-  const getColorClasses = (color: string) => {
-    const colors: Record<string, { bg: string; text: string }> = {
-      blue: { bg: 'bg-brand-50', text: 'text-brand-700' },
-      green: { bg: 'bg-green-50', text: 'text-green-600' },
-      purple: { bg: 'bg-purple-50', text: 'text-purple-600' },
-      orange: { bg: 'bg-orange-50', text: 'text-orange-600' },
-      red: { bg: 'bg-red-50', text: 'text-red-600' },
-      indigo: { bg: 'bg-indigo-50', text: 'text-indigo-600' },
-      cyan: { bg: 'bg-cyan-50', text: 'text-cyan-700' },
-      yellow: { bg: 'bg-yellow-50', text: 'text-yellow-700' },
-    }
-    return colors[color] || colors.blue
-  }
+  const topRoles = useMemo(
+    () => [...rolesWithCount].sort((a, b) => b.candidateCount - a.candidateCount).slice(0, 8),
+    [rolesWithCount]
+  )
 
   return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Dashboard</h1>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-zinc-900">Dashboard</h1>
+          <p className="text-sm text-zinc-500">Everything that needs your attention today.</p>
+        </div>
+        <DateRangePills value={range} onChange={setRange} />
+      </div>
 
-      {/* KPI Cards */}
-      <div className="relative grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <div
-          className="hidden md:block absolute top-0 bottom-0 w-px bg-gray-200"
-          style={{ left: 'calc(75% + 0.25rem)' }}
-        />
-        {kpis.map((kpi) => {
-          if (kpi.title === 'KPI_PLACEHOLDER') {
-            return <div key={kpi.title} />
+      {/* KPIs ---------------------------------------------------------------- */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+        <Kpi label="Live pipeline" value={`$${stats.liveValue.toLocaleString()}`} sub={`${stats.liveCount} candidates in play`} icon={CircleDollarSign} highlight />
+        <Kpi label="Submitted" value={stats.submitted} icon={Send} />
+        <Kpi label="Interviewing" value={stats.interviewing} icon={Users} />
+        <Kpi label="Offers out" value={stats.offers} icon={Handshake} />
+        <Kpi
+          label="Hires"
+          value={
+            <>
+              {stats.hires}
+              {stats.hireValue > 0 && (
+                <span className="ml-1.5 text-base font-semibold text-emerald-600">
+                  (+${stats.hireValue.toLocaleString()})
+                </span>
+              )}
+            </>
           }
+          icon={Briefcase}
+        />
+        <Kpi label="Needs follow-up" value={alerts.length} icon={Bell} warn={alerts.length > 0} />
+      </div>
 
-          const Icon = kpi.icon
-          const colors = getColorClasses(kpi.color)
-          return (
-            <div key={kpi.title} className={`bg-white rounded-lg shadow p-4 ${kpi.title === 'Pipeline Bounty' ? 'ring-2 ring-green-700 ring-opacity-60 shadow-lg shadow-green-200' : ''}`}>
-              <div className="flex items-center">
-                <div className={`p-2 rounded-lg ${colors.bg}`}>
-                  <Icon className={`h-6 w-6 ${colors.text}`} />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">{kpi.title}</p>
-                  <p className="text-2xl font-semibold text-gray-900">{kpi.value}</p>
-                </div>
-              </div>
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+        {/* Follow-ups ------------------------------------------------------- */}
+        <section className="rounded-xl border border-zinc-200 bg-white xl:col-span-1">
+          <header className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+              <Bell className="h-4 w-4 text-amber-500" />
+              Follow-ups
+            </h2>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-zinc-400">{alerts.length} stalled</span>
+              <button
+                onClick={() => setRulesOpen(true)}
+                className="rounded-lg p-1 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700"
+                title="Configure follow-up rules"
+              >
+                <Settings2 className="h-4 w-4" />
+              </button>
             </div>
-          )
-        })}
-      </div>
+          </header>
+          <div className="max-h-[420px] overflow-y-auto">
+            {alerts.length === 0 ? (
+              <p className="px-4 py-12 text-center text-sm text-zinc-400">
+                Nothing is stalling. Nice.
+              </p>
+            ) : (
+              <ul className="divide-y divide-zinc-100">
+                {alerts.map((j) => {
+                  const limit = j.limit ?? 0
+                  const chased = j.daysSinceFollowUp !== null
+                  return (
+                    <li key={j.candidate.id} className={chased ? 'bg-zinc-50/60' : ''}>
+                      <div className="flex items-center gap-2 px-4 py-3">
+                        <button
+                          onClick={() => openCandidate(j.candidate.id)}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <span className="block truncate text-sm font-medium text-zinc-900">
+                            {j.candidate.full_name}
+                          </span>
+                          <span className="block truncate text-xs text-zinc-400">
+                            {j.candidate.role?.company} · {statusMeta(j.status).label}
+                          </span>
+                          {chased && (
+                            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
+                              <Check className="h-3 w-3" />
+                              Followed up {relativeAgo(j.daysSinceFollowUp as number)}
+                              {j.lastFollowUp?.author ? ` · ${j.lastFollowUp.author}` : ''}
+                            </span>
+                          )}
+                        </button>
 
-      {/* Tables */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-        {/* Active Candidates */}
-        <div className="bg-white rounded-lg shadow col-span-3">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Active Candidates</h2>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                              chased ? 'bg-zinc-100 text-zinc-500' : 'bg-amber-50 text-amber-700'
+                            }`}
+                          >
+                            {relativeDays(j.daysInStatus)}
+                            <span className="opacity-60"> / {limit}d</span>
+                          </span>
+                          <button
+                            onClick={() => logFollowUp(j.candidate.id, new Date())}
+                            className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-zinc-600 transition hover:border-zinc-400 hover:text-zinc-900"
+                            title="Log that you chased this candidate today"
+                          >
+                            <BellRing className="h-3 w-3" />
+                            {chased ? 'Chased again' : 'Mark chased'}
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
           </div>
-          <div className="max-h-96 overflow-y-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="w-32 pl-6 pr-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider truncate">
-                    Name
-                  </th>
-                  <th className="w-24 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider truncate">
-                    Role
-                  </th>
-                  <th className="w-20 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider truncate">
-                    Bounty
-                  </th>
-                  <th className="px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
-                    <div className="flex items-center">
-                      <span>Status</span>
-                      <StatusFilterDropdown
-                        value={statusFilter}
-                        onChange={setStatusFilter}
-                        options={candidateStatuses}
-                      />
-                    </div>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {activeCandidates.map((candidate) => (
-                  <tr key={candidate.id} className={getRowTint(candidate.role?.source)}>
-                    <td className="w-32 pl-6 pr-2 py-4 whitespace-nowrap text-sm font-medium text-gray-900 truncate">
-                      {candidate.full_name}
+        </section>
+
+        {/* Active pipeline --------------------------------------------------- */}
+        <section className="rounded-xl border border-zinc-200 bg-white xl:col-span-2">
+          <header className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+            <h2 className="text-sm font-semibold text-zinc-900">Active candidates</h2>
+            <button
+              onClick={() => setTab('pipeline')}
+              className="inline-flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-900"
+            >
+              Open board <ArrowRight className="h-3 w-3" />
+            </button>
+          </header>
+          <div className="max-h-[420px] overflow-y-auto">
+            <table className="min-w-full text-sm">
+              <tbody className="divide-y divide-zinc-100">
+                {activeList.map((j) => (
+                  <tr
+                    key={j.candidate.id}
+                    onClick={() => openCandidate(j.candidate.id)}
+                    className="cursor-pointer transition-colors hover:bg-zinc-50"
+                  >
+                    <td className="px-4 py-2.5">
+                      <div className="font-medium text-zinc-900">{j.candidate.full_name}</div>
+                      <div className="text-xs text-zinc-400">
+                        {j.candidate.role?.job_title} · {j.candidate.role?.company}
+                      </div>
                     </td>
-                    <td className="w-24 px-2 py-4 whitespace-nowrap text-sm text-gray-500 truncate">
-                      {candidate.role?.job_title}
+                    <td className="px-4 py-2.5">
+                      <StatusBadge status={j.status} />
                     </td>
-                    <td className="w-20 px-2 py-4 whitespace-nowrap text-sm text-gray-500 truncate">
-                      {candidate.role?.bounty ?? '—'}
+                    <td className="px-4 py-2.5 text-xs text-zinc-500">
+                      {relativeDays(j.daysInStatus)}
                     </td>
-                    <td className="px-2 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(candidate.status)}`}>
-                        {formatStatus(candidate.status)}
-                      </span>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-zinc-600">
+                      {j.bounty ? `$${j.bounty.toLocaleString()}` : '—'}
                     </td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Roles with Candidate Count */}
-        <div className="bg-white rounded-lg shadow col-span-2">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Roles</h2>
-          </div>
-          <div className="max-h-96 overflow-y-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="w-28 pl-6 pr-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider truncate">
-                    Job Title
-                  </th>
-                  <th className="w-24 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider truncate">
-                    Company
-                  </th>
-                  <th className="w-12 px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider truncate">
-                    NUM.
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {rolesWithCandidateCount.slice(0, 10).map((role) => (
-                  <tr key={role.id} className={getRowTint(role.source)}>
-                    <td className="w-28 pl-6 pr-2 py-4 whitespace-nowrap text-sm font-medium text-gray-900 truncate">
-                      {role.job_title}
-                    </td>
-                    <td className="w-24 px-2 py-4 whitespace-nowrap text-sm text-gray-500 truncate">
-                      {role.company}
-                    </td>
-                    <td className="w-12 px-2 py-4 whitespace-nowrap text-sm text-gray-500 text-center truncate">
-                      {role.candidateCount}
+                {activeList.length === 0 && (
+                  <tr>
+                    <td className="px-4 py-12 text-center text-sm text-zinc-400">
+                      No active candidates in this period.
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
-        </div>
+        </section>
       </div>
+
+      {/* Roles ------------------------------------------------------------- */}
+      <section className="rounded-xl border border-zinc-200 bg-white">
+        <header className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+          <h2 className="text-sm font-semibold text-zinc-900">Roles</h2>
+          <button
+            onClick={() => setTab('roles')}
+            className="inline-flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-900"
+          >
+            See all <ArrowRight className="h-3 w-3" />
+          </button>
+        </header>
+        <div className="grid grid-cols-1 gap-px bg-zinc-100 sm:grid-cols-2 lg:grid-cols-4">
+          {topRoles.map((role) => (
+            <button
+              key={role.id}
+              onClick={() => openRole(role.id)}
+              className="bg-white p-4 text-left transition-colors hover:bg-zinc-50"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-zinc-900">{role.job_title}</div>
+                  <div className="truncate text-xs text-zinc-400">{role.company}</div>
+                </div>
+                <SourcePill source={role.source} />
+              </div>
+              <div className="mt-3 flex items-center justify-between text-xs">
+                <span className="text-zinc-500">
+                  {role.candidateCount} candidate{role.candidateCount === 1 ? '' : 's'}
+                </span>
+                <span className="font-medium tabular-nums text-zinc-900">
+                  {role.bounty ? `$${role.bounty.toLocaleString()}` : '—'}
+                </span>
+              </div>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <FollowUpSettings open={rulesOpen} onClose={() => setRulesOpen(false)} />
+    </div>
+  )
+}
+
+function Kpi({
+  label,
+  value,
+  sub,
+  subClassName = 'text-zinc-400',
+  icon: Icon,
+  highlight,
+  warn,
+}: {
+  label: string
+  value: React.ReactNode
+  sub?: string
+  subClassName?: string
+  icon: React.ElementType
+  highlight?: boolean
+  warn?: boolean
+}) {
+  return (
+    <div
+      className={`rounded-xl border bg-white p-4 ${
+        highlight ? 'border-zinc-900 ring-1 ring-zinc-900' : 'border-zinc-200'
+      }`}
+    >
+      <div className="flex items-center gap-2 text-xs font-medium text-zinc-500">
+        <Icon className={`h-3.5 w-3.5 ${warn ? 'text-amber-500' : 'text-zinc-400'}`} />
+        {label}
+      </div>
+      <div className="mt-1.5 text-2xl font-semibold tabular-nums text-zinc-900">{value}</div>
+      {sub && <div className={`mt-0.5 truncate text-xs ${subClassName}`}>{sub}</div>}
     </div>
   )
 }

@@ -1,216 +1,163 @@
 'use client'
 
 import { useState } from 'react'
-import { useCandidates } from '@/hooks/useData'
-import { Role, CandidateStatus } from '@/types'
-import { X, User, Mail, ExternalLink, Briefcase } from 'lucide-react'
+import Modal from '@/components/common/Modal'
+import { Field, GhostButton, PrimaryButton, inputClass } from '@/components/common/Field'
+import { useData } from '@/context/DataContext'
+import { CandidateStatus } from '@/types'
+import { ALL_STATUSES, statusMeta } from '@/lib/status'
+import { fromDateInput, toDateInput } from '@/lib/dates'
+import DateInput from '@/components/common/DateInput'
 import AddRoleModal from '@/components/roles/AddRoleModal'
 
-interface AddCandidateModalProps {
-  isOpen: boolean
-  onClose: () => void
-  roles: Role[]
+const EMPTY = {
+  full_name: '',
+  email: '',
+  linkedin_url: '',
+  role_id: '',
+  notes: '',
+  status: 'submitted' as CandidateStatus,
 }
 
-const candidateStatuses: CandidateStatus[] = [
-  'cv_rejected',
-  'submitted',
-  'first_interview',
-  'second_interview',
-  'third_interview',
-  'fourth_interview',
-  'final_interview',
-  'client_rejected',
-  'offer_accepted',
-  'candidate_quit',
-  'standby',
-  'to_be_called',
-]
+export default function AddCandidateModal({
+  open,
+  onClose,
+}: {
+  open: boolean
+  onClose: () => void
+}) {
+  const { roles, createCandidate } = useData()
+  const [form, setForm] = useState(EMPTY)
+  const [date, setDate] = useState(() => toDateInput(new Date()))
+  const [roleModal, setRoleModal] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-export default function AddCandidateModal({ isOpen, onClose, roles }: AddCandidateModalProps) {
-  const { createCandidate } = useCandidates()
-  
-  const [formData, setFormData] = useState({
-    full_name: '',
-    email: '',
-    linkedin_url: '',
-    role_id: '',
-    status: 'cv_rejected' as CandidateStatus,
-  })
-  
-  const [showRoleModal, setShowRoleModal] = useState(false)
-  const [pendingRoleSelection, setPendingRoleSelection] = useState(false)
-  const [loading, setLoading] = useState(false)
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
-
+    setBusy(true)
+    setError(null)
     try {
-      await createCandidate(formData)
+      await createCandidate(
+        {
+          full_name: form.full_name,
+          email: form.email || 'n/a',
+          linkedin_url: form.linkedin_url || undefined,
+          role_id: form.role_id,
+          notes: form.notes || undefined,
+          status: form.status,
+        },
+        fromDateInput(date)
+      )
+      setForm(EMPTY)
+      setDate(toDateInput(new Date()))
       onClose()
-      setFormData({
-        full_name: '',
-        email: '',
-        linkedin_url: '',
-        role_id: '',
-        status: 'cv_rejected',
-      })
-    } catch (error) {
-      console.error('Error creating candidate:', error)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create the candidate')
     } finally {
-      setLoading(false)
+      setBusy(false)
     }
   }
 
-  const handleRoleModalClose = () => {
-    setShowRoleModal(false)
-    setPendingRoleSelection(false)
-  }
-
-  if (!isOpen) return null
-
   return (
     <>
-      <div className="fixed inset-0 bg-white sm:bg-gray-50/50 sm:backdrop-blur-[2px] flex items-stretch sm:items-center justify-center z-50">
-        <div className="bg-white w-full h-full sm:h-auto sm:rounded-lg p-6 sm:max-w-md overflow-y-auto">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold text-gray-900">Add Candidate</h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <X className="h-6 w-6" />
-            </button>
+      <Modal open={open} onClose={onClose} title="New candidate">
+        <form onSubmit={submit} className="space-y-4 p-5">
+          <Field label="Full name">
+            <input
+              required
+              autoFocus
+              className={inputClass}
+              value={form.full_name}
+              onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+            />
+          </Field>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="Email">
+              <input
+                className={inputClass}
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
+            </Field>
+            <Field label="LinkedIn">
+              <input
+                className={inputClass}
+                placeholder="https://linkedin.com/in/…"
+                value={form.linkedin_url}
+                onChange={(e) => setForm({ ...form, linkedin_url: e.target.value })}
+              />
+            </Field>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Name
-              </label>
-              <div className="relative">
-                <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <input
-                  type="text"
-                  required
-                  value={formData.full_name}
-                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                  className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-brand-500 focus:border-brand-500"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <input
-                  type="email"
-                  required
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-brand-500 focus:border-brand-500"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                LinkedIn URL
-              </label>
-              <div className="relative">
-                <ExternalLink className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <input
-                  type="url"
-                  value={formData.linkedin_url}
-                  onChange={(e) => setFormData({ ...formData, linkedin_url: e.target.value })}
-                  className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-brand-500 focus:border-brand-500"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Role
-              </label>
-              <div className="relative">
-                <Briefcase className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <select
-                  required
-                  value={formData.role_id}
-                  onChange={(e) => {
-                    if (e.target.value === 'new') {
-                      setPendingRoleSelection(true)
-                      setShowRoleModal(true)
-                    } else {
-                      setFormData({ ...formData, role_id: e.target.value })
-                    }
-                  }}
-                  className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-brand-500 focus:border-brand-500"
-                >
-                  <option value="">Select a role</option>
-                  {roles.map((role) => (
-                    <option key={role.id} value={role.id}>
-                      {role.job_title} - {role.company}
-                    </option>
-                  ))}
-                  <option value="new">+ Add new role</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Initial Status
-              </label>
+          <Field label="Role">
+            <div className="flex gap-2">
               <select
-                value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value as CandidateStatus })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-brand-500 focus:border-brand-500"
+                required
+                className={inputClass}
+                value={form.role_id}
+                onChange={(e) => setForm({ ...form, role_id: e.target.value })}
               >
-                {candidateStatuses.map((status) => (
-                  <option key={status} value={status}>
-                    {status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                <option value="">Select a role…</option>
+                {roles.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.job_title} — {r.company}
                   </option>
                 ))}
               </select>
+              <GhostButton type="button" onClick={() => setRoleModal(true)} className="shrink-0">
+                New
+              </GhostButton>
             </div>
+          </Field>
 
-            <div className="flex justify-end space-x-3 pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="Starting stage">
+              <select
+                className={inputClass}
+                value={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.value as CandidateStatus })}
               >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-4 py-2 bg-brand-600 text-white rounded-md hover:bg-brand-700 disabled:opacity-50"
-              >
-                {loading ? 'Creating...' : 'Create Candidate'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
+                {ALL_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {statusMeta(s).label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Date of that stage" hint="Used for metrics and follow-up alerts.">
+              <DateInput eager value={date} onChange={setDate} className={inputClass} />
+            </Field>
+          </div>
 
-      {/* Add Role Modal */}
-      {showRoleModal && (
-        <AddRoleModal
-          isOpen={showRoleModal}
-          onClose={handleRoleModalClose}
-          onCreated={(role: any) => {
-            if (pendingRoleSelection) {
-              setFormData((prev) => ({ ...prev, role_id: role.id }))
-            }
-          }}
-        />
-      )}
+          <Field label="Notes">
+            <textarea
+              rows={2}
+              className={inputClass}
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            />
+          </Field>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <div className="flex justify-end gap-2 border-t border-zinc-100 pt-4">
+            <GhostButton type="button" onClick={onClose}>
+              Cancel
+            </GhostButton>
+            <PrimaryButton type="submit" disabled={busy}>
+              {busy ? 'Creating…' : 'Create candidate'}
+            </PrimaryButton>
+          </div>
+        </form>
+      </Modal>
+
+      <AddRoleModal
+        open={roleModal}
+        onClose={() => setRoleModal(false)}
+        onCreated={(role) => setForm((prev) => ({ ...prev, role_id: role.id }))}
+      />
     </>
   )
 }

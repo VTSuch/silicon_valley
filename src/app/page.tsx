@@ -2,22 +2,20 @@
 
 import { useAuth } from '@/hooks/useAuth'
 import LoginForm from '@/components/auth/LoginForm'
-import DashboardLayout from '@/components/layout/DashboardLayout'
+import AppShell from '@/components/layout/AppShell'
 
 export default function Home() {
   const { user, loading } = useAuth()
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-gray-600">Cargando...</div>
+      <div className="flex min-h-screen items-center justify-center bg-zinc-50">
+        <div className="text-sm text-zinc-400">Loading…</div>
       </div>
     )
   }
 
-  if (!user) {
-    return <LoginForm />
-  }
+  if (!user) return <LoginForm />
 
-  return <DashboardLayout />
+  return <AppShell />
 }

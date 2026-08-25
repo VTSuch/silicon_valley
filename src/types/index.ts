@@ -2,19 +2,21 @@ export type WorkMode = 'remote' | 'onsite' | 'hybrid'
 
 export type RoleSource = 'empty' | 'Upnest' | 'Paraform'
 
-export type CandidateStatus = 
-  | 'cv_rejected'
+export type CandidateStatus =
+  | 'to_be_called'
+  | 'standby'
   | 'submitted'
   | 'first_interview'
   | 'second_interview'
   | 'third_interview'
   | 'fourth_interview'
   | 'final_interview'
-  | 'client_rejected'
+  | 'offer'
   | 'offer_accepted'
+  | 'offer_rejected'
+  | 'cv_rejected'
+  | 'client_rejected'
   | 'candidate_quit'
-  | 'standby'
-  | 'to_be_called'
 
 export interface Role {
   id: string
@@ -33,6 +35,8 @@ export interface Role {
   about_company?: string
   skills?: string
   bounty?: number
+  /** Fee percentage agreed for this role, e.g. 17.5. */
+  bounty_pct?: number
   created_at: string
 }
 
@@ -43,6 +47,9 @@ export interface Candidate {
   linkedin_url?: string
   role_id: string
   status: CandidateStatus
+  notes?: string
+  /** Salary the candidate signed at. Overrides the role baseline bounty. */
+  hired_salary?: number
   created_at: string
   role?: Role
 }
@@ -50,3 +57,23 @@ export interface Candidate {
 export interface CandidateWithRole extends Candidate {
   role: Role
 }
+
+export interface StatusEvent {
+  id: string
+  candidate_id: string
+  status: CandidateStatus
+  occurred_at: string
+  note?: string
+  created_at: string
+}
+
+export interface FollowUp {
+  id: string
+  candidate_id: string
+  occurred_at: string
+  note?: string
+  author?: string
+  created_at: string
+}
+
+export type RoleWithCount = Role & { candidateCount: number }
