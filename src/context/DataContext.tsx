@@ -93,6 +93,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [followUps, setFollowUps] = useState<FollowUp[]>([])
   const [followUpRules, setFollowUpRules] = useState<FollowUpRules>({})
   const [loading, setLoading] = useState(true)
+  const [signedIn, setSignedIn] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
@@ -142,19 +143,34 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setLoading(false)
   }, [])
 
+  // Every table is behind RLS, so fetching before the session exists just
+  // returns empty rows. Wait for auth, and refetch whenever it changes.
   useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      await refresh()
-      if (cancelled) return
-    }
-    void load()
-    return () => {
-      cancelled = true
-    }
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session) {
+        setRoles([])
+        setCandidates([])
+        setStatusEvents([])
+        setFollowUps([])
+        setFollowUpRules({})
+        setSignedIn(false)
+        setLoading(false)
+        return
+      }
+
+      setSignedIn(true)
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+        setLoading(true)
+        void refresh()
+      }
+    })
+
+    return () => data.subscription.unsubscribe()
   }, [refresh])
 
   useEffect(() => {
+    if (!signedIn) return
+
     const channel = supabase
       .channel('silicon-valley-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'roles' }, () => refresh())
@@ -177,7 +193,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [refresh])
+  }, [refresh, signedIn])
 
   const logFollowUp = useCallback(
     async (candidateId: string, occurredAt: Date, note?: string) => {
