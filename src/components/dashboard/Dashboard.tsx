@@ -19,7 +19,7 @@ import { useUI } from '@/context/UIContext'
 import DateRangePills, { RangeSelection, defaultSelection } from '@/components/common/DateRangePills'
 import { StatusBadge, SourcePill } from '@/components/common/StatusBadge'
 import { inRange, relativeAgo, relativeDays } from '@/lib/dates'
-import { statusMeta } from '@/lib/status'
+import { pipelineOrder, statusMeta } from '@/lib/status'
 import FollowUpSettings from './FollowUpSettings'
 
 export default function Dashboard() {
@@ -79,7 +79,11 @@ export default function Dashboard() {
     () =>
       cohort
         .filter((j) => j.active)
-        .sort((a, b) => statusMeta(b.status).rank - statusMeta(a.status).rank || b.bounty - a.bounty),
+        // Furthest along first: the reverse of the pipeline order, so Offer
+        // extended sits on top and Calendly sent at the bottom.
+        .sort(
+          (a, b) => pipelineOrder(b.status) - pipelineOrder(a.status) || b.bounty - a.bounty
+        ),
     [cohort]
   )
 

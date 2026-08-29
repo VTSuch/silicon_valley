@@ -29,6 +29,7 @@ import {
 } from '@/lib/status'
 import { formatDate, fromDateInput, relativeAgo, relativeDays, toDateInput } from '@/lib/dates'
 import DateInput from '@/components/common/DateInput'
+import RoleCombobox from '@/components/common/RoleCombobox'
 
 export default function CandidateDrawer() {
   const { openCandidateId, closeCandidate, openRole } = useUI()
@@ -406,17 +407,11 @@ export default function CandidateDrawer() {
                 />
               </Field>
               <Field label="Role">
-                <select
-                  className={inputClass}
+                <RoleCombobox
+                  roles={roles}
                   value={form.role_id}
-                  onChange={(e) => setForm({ ...form, role_id: e.target.value })}
-                >
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.job_title} — {r.company}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(role_id) => setForm({ ...form, role_id })}
+                />
               </Field>
               <Field label="Notes">
                 <textarea

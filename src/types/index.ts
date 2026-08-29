@@ -3,7 +3,9 @@ export type WorkMode = 'remote' | 'onsite' | 'hybrid'
 export type RoleSource = 'empty' | 'Upnest' | 'Paraform'
 
 export type CandidateStatus =
-  | 'to_be_called'
+  | 'calendly_sent'
+  | 'calendly_booked'
+  | 'to_be_submitted'
   | 'standby'
   | 'submitted'
   | 'first_interview'

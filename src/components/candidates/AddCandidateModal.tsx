@@ -9,6 +9,7 @@ import { ALL_STATUSES, statusMeta } from '@/lib/status'
 import { fromDateInput, toDateInput } from '@/lib/dates'
 import DateInput from '@/components/common/DateInput'
 import AddRoleModal from '@/components/roles/AddRoleModal'
+import RoleCombobox from '@/components/common/RoleCombobox'
 
 const EMPTY = {
   full_name: '',
@@ -35,6 +36,10 @@ export default function AddCandidateModal({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!form.role_id) {
+      setError('Pick a role first.')
+      return
+    }
     setBusy(true)
     setError(null)
     try {
@@ -92,24 +97,12 @@ export default function AddCandidateModal({
           </div>
 
           <Field label="Role">
-            <div className="flex gap-2">
-              <select
-                required
-                className={inputClass}
-                value={form.role_id}
-                onChange={(e) => setForm({ ...form, role_id: e.target.value })}
-              >
-                <option value="">Select a role…</option>
-                {roles.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.job_title} — {r.company}
-                  </option>
-                ))}
-              </select>
-              <GhostButton type="button" onClick={() => setRoleModal(true)} className="shrink-0">
-                New
-              </GhostButton>
-            </div>
+            <RoleCombobox
+              roles={roles}
+              value={form.role_id}
+              onChange={(role_id) => setForm({ ...form, role_id })}
+              onCreateNew={() => setRoleModal(true)}
+            />
           </Field>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

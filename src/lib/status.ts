@@ -33,10 +33,21 @@ export interface StatusMeta {
 }
 
 export const STATUS_META: Record<CandidateStatus, StatusMeta> = {
-  to_be_called: {
-    id: 'to_be_called', label: 'To be called', short: 'To call', group: 'lead', rank: 0,
+  calendly_sent: {
+    id: 'calendly_sent', label: 'Calendly sent', short: 'Cal. sent', group: 'lead', rank: 0,
     active: true, staleAfterDays: 3,
     dot: 'bg-sky-500', badge: 'bg-sky-50 text-sky-700 ring-sky-600/20', column: 'bg-sky-500',
+  },
+  calendly_booked: {
+    id: 'calendly_booked', label: 'Calendly booked', short: 'Cal. booked', group: 'lead', rank: 0,
+    active: true, staleAfterDays: 5,
+    dot: 'bg-cyan-500', badge: 'bg-cyan-50 text-cyan-700 ring-cyan-600/20', column: 'bg-cyan-500',
+  },
+  to_be_submitted: {
+    id: 'to_be_submitted', label: 'To be submitted', short: 'To submit', group: 'lead', rank: 0,
+    active: true, staleAfterDays: 3,
+    dot: 'bg-indigo-500', badge: 'bg-indigo-50 text-indigo-700 ring-indigo-600/20',
+    column: 'bg-indigo-500',
   },
   standby: {
     id: 'standby', label: 'Standby', short: 'Standby', group: 'lead', rank: 0,
@@ -107,7 +118,9 @@ export const STATUS_META: Record<CandidateStatus, StatusMeta> = {
 
 /** Funnel order, used by the pipeline board and every status picker. */
 export const PIPELINE_STATUSES: CandidateStatus[] = [
-  'to_be_called',
+  'calendly_sent',
+  'calendly_booked',
+  'to_be_submitted',
   'submitted',
   'first_interview',
   'second_interview',
@@ -139,7 +152,9 @@ export interface BoardColumn {
 }
 
 export const BOARD_COLUMNS: BoardColumn[] = [
-  { id: 'to_be_called', label: 'To be called', statuses: ['to_be_called'], entry: 'to_be_called', color: 'bg-sky-500' },
+  { id: 'calendly_sent', label: 'Calendly sent', statuses: ['calendly_sent'], entry: 'calendly_sent', color: 'bg-sky-500' },
+  { id: 'calendly_booked', label: 'Calendly booked', statuses: ['calendly_booked'], entry: 'calendly_booked', color: 'bg-cyan-500' },
+  { id: 'to_be_submitted', label: 'To be submitted', statuses: ['to_be_submitted'], entry: 'to_be_submitted', color: 'bg-indigo-500' },
   { id: 'submitted', label: 'Submitted', statuses: ['submitted'], entry: 'submitted', color: 'bg-blue-500' },
   { id: 'first', label: 'First stage', statuses: ['first_interview'], entry: 'first_interview', color: 'bg-violet-500' },
   { id: 'mid', label: 'Mid stage', statuses: MID_STATUSES, entry: 'second_interview', color: 'bg-amber-500' },
@@ -147,6 +162,14 @@ export const BOARD_COLUMNS: BoardColumn[] = [
   { id: 'offer', label: 'Offer extended', statuses: ['offer'], entry: 'offer', color: 'bg-rose-500' },
   { id: 'hired', label: 'Hired', statuses: ['offer_accepted'], entry: 'offer_accepted', color: 'bg-emerald-500' },
 ]
+
+/**
+ * Where a status sits in the funnel, by its position in PIPELINE_STATUSES.
+ * Anything outside the pipeline (standby, rejections) sorts below everything.
+ */
+export function pipelineOrder(status: string): number {
+  return PIPELINE_STATUSES.indexOf(normalizeStatus(status))
+}
 
 /** Which mid step a status is, 1-based. 0 when it is not a mid stage. */
 export function midStep(status: string): number {
@@ -167,6 +190,7 @@ export const ALL_STATUSES: CandidateStatus[] = [...PIPELINE_STATUSES, ...CLOSED_
 const LEGACY: Record<string, CandidateStatus> = {
   sent_to_agency: 'submitted',
   sent_to_client: 'submitted',
+  to_be_called: 'calendly_sent',
 }
 
 export function normalizeStatus(status: string): CandidateStatus {
