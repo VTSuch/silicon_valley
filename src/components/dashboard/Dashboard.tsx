@@ -206,7 +206,10 @@ export default function Dashboard() {
         {/* Active pipeline --------------------------------------------------- */}
         <section className="rounded-xl border border-zinc-200 bg-white xl:col-span-2">
           <header className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
-            <h2 className="text-sm font-semibold text-zinc-900">Active candidates</h2>
+            <h2 className="text-sm font-semibold text-zinc-900">
+              Active candidates{' '}
+              <span className="font-normal text-zinc-400">({activeList.length})</span>
+            </h2>
             <button
               onClick={() => setTab('pipeline')}
               className="inline-flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-900"
