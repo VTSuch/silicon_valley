@@ -18,8 +18,12 @@ export function useAuth() {
     getUser()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setUser(session?.user ?? null)
+      (_event, session) => {
+        const next = session?.user ?? null
+        // Focusing the tab re-validates the session and hands back an equal
+        // but brand-new user object. Keep the old reference so nothing
+        // downstream re-renders for a change that did not happen.
+        setUser((prev) => (prev?.id === next?.id ? prev : next))
         setLoading(false)
       }
     )

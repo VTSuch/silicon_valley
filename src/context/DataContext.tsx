@@ -1,6 +1,14 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { supabase } from '@/lib/supabase'
 import {
   Candidate,
@@ -94,6 +102,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [followUpRules, setFollowUpRules] = useState<FollowUpRules>({})
   const [loading, setLoading] = useState(true)
   const [signedIn, setSignedIn] = useState(false)
+  /** Which user's data is already in memory, so focus events don't refetch. */
+  const loadedForUser = useRef<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
@@ -144,10 +154,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   // Every table is behind RLS, so fetching before the session exists just
-  // returns empty rows. Wait for auth, and refetch whenever it changes.
+  // returns empty rows. Wait for auth, then load once per user.
+  //
+  // Supabase re-validates the session whenever the tab regains focus and
+  // fires SIGNED_IN / TOKEN_REFRESHED again. Reloading on those wiped the
+  // screen back to a spinner every time you came back to the tab, so only a
+  // genuinely different user triggers a fetch — anything that actually
+  // changed meanwhile arrives over the realtime channel.
   useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
+        loadedForUser.current = null
         setRoles([])
         setCandidates([])
         setStatusEvents([])
@@ -159,10 +176,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
 
       setSignedIn(true)
-      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
-        setLoading(true)
-        void refresh()
-      }
+      if (loadedForUser.current === session.user.id) return
+
+      loadedForUser.current = session.user.id
+      setLoading(true)
+      void refresh()
     })
 
     return () => data.subscription.unsubscribe()
