@@ -41,6 +41,10 @@ export default function Pipeline() {
     const q = query.trim().toLowerCase()
     const visible = journeys.filter((j) => {
       if (!BOARD_COLUMNS.some((c) => c.statuses.includes(j.status))) return false
+      // Dropping a candidate who never had a role means giving up on placing
+      // them, not a rejection in a process — that belongs to the role search,
+      // not to the board.
+      if (!j.candidate.role_id && statusMeta(j.status).group === 'lost') return false
       // Filter on when the candidate entered the pipeline, the same cohort
       // rule the dashboard and metrics use.
       if (range.range.from || range.range.to) {
