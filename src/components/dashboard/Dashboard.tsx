@@ -162,8 +162,11 @@ export default function Dashboard() {
                           onClick={() => openCandidate(j.candidate.id)}
                           className="min-w-0 flex-1 text-left"
                         >
-                          <span className="block truncate text-sm font-medium text-zinc-900">
-                            {j.candidate.full_name}
+                          <span className="flex items-center gap-2">
+                            <span className="min-w-0 truncate text-sm font-medium text-zinc-900">
+                              {j.candidate.full_name}
+                            </span>
+                            <StatusBadge status={j.status} className="shrink-0" />
                           </span>
                           <span className="block truncate text-xs text-zinc-400">
                             {j.candidate.role?.company}
@@ -176,8 +179,6 @@ export default function Dashboard() {
                             </span>
                           )}
                         </button>
-
-                        <StatusBadge status={j.status} className="shrink-0" />
 
                         <div className="flex shrink-0 flex-col items-end gap-1">
                           <span
