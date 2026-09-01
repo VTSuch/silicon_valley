@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { CalendarDays, Check, ChevronDown } from 'lucide-react'
 import Calendar from './Calendar'
+import DateWheel from './DateWheel'
 import {
   DateRange,
   RangePresetId,
@@ -17,17 +18,18 @@ export interface RangeSelection {
   range: DateRange
 }
 
-const MORE: { id: RangePresetId; label: string }[] = [
-  { id: 'last_3_months', label: 'Last 3 months' },
-  { id: 'all_time', label: 'All time' },
-]
+export const PRESET_LABELS: Record<RangePresetId, string> = {
+  this_week: 'This week',
+  this_month: 'This month',
+  this_year: 'This year',
+  focus_period: 'This focus period',
+  last_3_months: 'Last 3 months',
+  all_time: 'All time',
+  custom: 'Custom range',
+}
 
-/** Presets that get their own always-visible pill. */
-const PILLS: { id: RangePresetId; label: string }[] = [
-  { id: 'this_week', label: 'This week' },
-  { id: 'this_month', label: 'This month' },
-  { id: 'this_year', label: 'This year' },
-]
+const DEFAULT_PILLS: RangePresetId[] = ['this_week', 'this_month', 'this_year']
+const DEFAULT_MORE: RangePresetId[] = ['last_3_months', 'all_time']
 
 export function defaultSelection(): RangeSelection {
   return { preset: 'all_time', range: presetRange('all_time') }
@@ -36,12 +38,26 @@ export function defaultSelection(): RangeSelection {
 interface Props {
   value: RangeSelection
   onChange: (next: RangeSelection) => void
+  /** Presets with their own always-visible button. */
+  pills?: RangePresetId[]
+  /** Presets tucked inside the dropdown. */
+  more?: RangePresetId[]
+  /** Custom-range UI: one calendar, or day/month/year wheels for each end. */
+  picker?: 'calendar' | 'wheel'
 }
 
-export default function DateRangePills({ value, onChange }: Props) {
+export default function DateRangePills({
+  value,
+  onChange,
+  pills = DEFAULT_PILLS,
+  more = DEFAULT_MORE,
+  picker = 'calendar',
+}: Props) {
   const [open, setOpen] = useState(false)
   const [picking, setPicking] = useState(false)
   const [draft, setDraft] = useState<DateRange>({ from: null, to: null })
+  const [wheelFrom, setWheelFrom] = useState<Date>(() => startOfDay(new Date()))
+  const [wheelTo, setWheelTo] = useState<Date>(() => startOfDay(new Date()))
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -87,20 +103,20 @@ export default function DateRangePills({ value, onChange }: Props) {
   const moreLabel =
     value.preset === 'custom'
       ? `${formatDate(value.range.from)} → ${formatDate(value.range.to)}`
-      : (MORE.find((m) => m.id === value.preset)?.label ?? 'More')
+      : (more.includes(value.preset) ? PRESET_LABELS[value.preset] : 'More')
 
-  const moreActive = !PILLS.some((p) => p.id === value.preset)
+  const moreActive = !pills.includes(value.preset)
 
   return (
     <div ref={ref} className="relative inline-flex items-center gap-1 rounded-full bg-zinc-100 p-1">
-      {PILLS.map((p) => (
+      {pills.map((id) => (
         <button
-          key={p.id}
+          key={id}
           type="button"
-          onClick={() => select(p.id)}
-          className={`${pillBase} ${value.preset === p.id ? on : off}`}
+          onClick={() => select(id)}
+          className={`${pillBase} ${value.preset === id ? on : off}`}
         >
-          {p.label}
+          {PRESET_LABELS[id]}
         </button>
       ))}
       <button
@@ -116,15 +132,15 @@ export default function DateRangePills({ value, onChange }: Props) {
         <div className="sv-fade-in absolute right-0 top-full z-50 mt-2 w-max min-w-[220px] rounded-xl border border-zinc-200 bg-white p-1.5 shadow-lg">
           {!picking ? (
             <>
-              {MORE.map((m) => (
+              {more.map((id) => (
                 <button
-                  key={m.id}
+                  key={id}
                   type="button"
-                  onClick={() => select(m.id)}
+                  onClick={() => select(id)}
                   className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50"
                 >
-                  {m.label}
-                  {value.preset === m.id && <Check className="h-4 w-4 text-zinc-900" />}
+                  {PRESET_LABELS[id]}
+                  {value.preset === id && <Check className="h-4 w-4 text-zinc-900" />}
                 </button>
               ))}
               <div className="my-1 h-px bg-zinc-100" />
@@ -132,6 +148,9 @@ export default function DateRangePills({ value, onChange }: Props) {
                 type="button"
                 onClick={() => {
                   setDraft({ from: null, to: null })
+                  const base = value.range.from ?? startOfDay(new Date())
+                  setWheelFrom(base)
+                  setWheelTo(value.range.to ?? startOfDay(new Date()))
                   setPicking(true)
                 }}
                 className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50"
@@ -140,6 +159,42 @@ export default function DateRangePills({ value, onChange }: Props) {
                 Custom range…
               </button>
             </>
+          ) : picker === 'wheel' ? (
+            <div className="w-[26rem] max-w-[90vw] p-3">
+              <div className="flex gap-3">
+                <DateWheel label="Start date" value={wheelFrom} onChange={setWheelFrom} />
+                <DateWheel label="End date" value={wheelTo} onChange={setWheelTo} />
+              </div>
+              {wheelTo < wheelFrom && (
+                <p className="mt-2 text-xs text-red-600">
+                  The end date is before the start date.
+                </p>
+              )}
+              <div className="mt-3 flex justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPicking(false)}
+                  className="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-50"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  disabled={wheelTo < wheelFrom}
+                  onClick={() => {
+                    onChange({
+                      preset: 'custom',
+                      range: { from: startOfDay(wheelFrom), to: endOfDay(wheelTo) },
+                    })
+                    setOpen(false)
+                    setPicking(false)
+                  }}
+                  className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-zinc-700 disabled:opacity-40"
+                >
+                  Apply range
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="p-2">
               <div className="mb-2 text-xs font-medium text-zinc-500">

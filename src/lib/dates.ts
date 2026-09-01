@@ -11,9 +11,16 @@ export type RangePresetId =
   | 'this_week'
   | 'this_month'
   | 'this_year'
+  | 'focus_period'
   | 'last_3_months'
   | 'all_time'
   | 'custom'
+
+/**
+ * Start of the current focus period — the stretch of work we care about
+ * right now. Change this one date to move the "This focus period" filter.
+ */
+export const FOCUS_PERIOD_START = new Date(2026, 6, 1)
 
 export const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
 export const endOfDay = (d: Date) =>
@@ -51,6 +58,9 @@ export function presetRange(id: RangePresetId, now = new Date()): DateRange {
       return { from: startOfMonth(now), to: endOfDay(now) }
     case 'this_year':
       return { from: new Date(now.getFullYear(), 0, 1), to: endOfDay(now) }
+    case 'focus_period':
+      // Open ended: everything from the start of the focus period onwards.
+      return { from: FOCUS_PERIOD_START, to: null }
     case 'last_3_months':
       return { from: startOfDay(addMonths(now, -3)), to: endOfDay(now) }
     default:

@@ -19,7 +19,11 @@ import { useJourneys } from '@/hooks/useData'
 import { useUI } from '@/context/UIContext'
 import { Journey } from '@/lib/journey'
 import { BOARD_COLUMNS, BoardColumn, midStep, rejectionFor, statusMeta } from '@/lib/status'
-import { relativeAgo, relativeDays, toDateInput, fromDateInput } from '@/lib/dates'
+import { inRange, relativeAgo, relativeDays, toDateInput, fromDateInput } from '@/lib/dates'
+import DateRangePills, {
+  RangeSelection,
+  defaultSelection,
+} from '@/components/common/DateRangePills'
 import DateInput from '@/components/common/DateInput'
 
 export default function Pipeline() {
@@ -29,6 +33,7 @@ export default function Pipeline() {
   const [dragging, setDragging] = useState<Journey | null>(null)
   const [query, setQuery] = useState('')
   const [moveDate, setMoveDate] = useState(() => toDateInput(new Date()))
+  const [range, setRange] = useState<RangeSelection>(defaultSelection)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
@@ -36,6 +41,11 @@ export default function Pipeline() {
     const q = query.trim().toLowerCase()
     const visible = journeys.filter((j) => {
       if (!BOARD_COLUMNS.some((c) => c.statuses.includes(j.status))) return false
+      // Filter on when the candidate entered the pipeline, the same cohort
+      // rule the dashboard and metrics use.
+      if (range.range.from || range.range.to) {
+        if (!inRange(j.submittedAt ?? new Date(j.candidate.created_at), range.range)) return false
+      }
       if (!q) return true
       return (
         j.candidate.full_name.toLowerCase().includes(q) ||
@@ -49,7 +59,7 @@ export default function Pipeline() {
         .filter((j) => column.statuses.includes(j.status))
         .sort((a, b) => b.daysInStatus - a.daysInStatus),
     }))
-  }, [journeys, query])
+  }, [journeys, query, range])
 
   const onDragEnd = async (event: DragEndEvent) => {
     setDragging(null)
@@ -80,6 +90,13 @@ export default function Pipeline() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <DateRangePills
+            value={range}
+            onChange={setRange}
+            pills={['this_week', 'this_month', 'this_year', 'focus_period', 'all_time']}
+            more={['last_3_months']}
+            picker="wheel"
+          />
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
             <input
