@@ -66,7 +66,7 @@ export default function Calendar({ from, to, onPick, month }: CalendarProps) {
 
       <div className="mb-1 grid grid-cols-7 gap-0.5">
         {WEEKDAYS.map((d) => (
-          <div key={d} className="py-1 text-center text-[10px] font-medium text-zinc-400">
+          <div key={d} className="py-1 text-center text-[0.625rem] font-medium text-zinc-400">
             {d}
           </div>
         ))}

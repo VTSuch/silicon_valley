@@ -19,6 +19,8 @@ const EMPTY = {
   salary_max: '',
   bounty_pct: '',
   bounty: '',
+  paraform_link: '',
+  job_description_link: '',
   description: '',
   requirements: '',
   skills: '',
@@ -80,6 +82,8 @@ export default function AddRoleModal({
         salary_max: form.salary_max ? Number(form.salary_max) : undefined,
         bounty: form.bounty ? Number(form.bounty) : undefined,
         bounty_pct: form.bounty_pct ? Number(form.bounty_pct) : undefined,
+        paraform_link: form.paraform_link || undefined,
+        job_description_link: form.job_description_link || undefined,
         description: form.description || undefined,
         requirements: form.requirements || undefined,
         skills: form.skills || undefined,
@@ -197,6 +201,27 @@ export default function AddRoleModal({
               placeholder="5+ years"
               value={form.experience}
               onChange={(e) => set('experience', e.target.value)}
+            />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Paraform link" hint="Optional. Shown as a link on the role.">
+            <input
+              type="url"
+              placeholder="https://www.paraform.com/…"
+              className={inputClass}
+              value={form.paraform_link}
+              onChange={(e) => set('paraform_link', e.target.value)}
+            />
+          </Field>
+          <Field label="Job description link" hint="Optional.">
+            <input
+              type="url"
+              placeholder="https://…"
+              className={inputClass}
+              value={form.job_description_link}
+              onChange={(e) => set('job_description_link', e.target.value)}
             />
           </Field>
         </div>

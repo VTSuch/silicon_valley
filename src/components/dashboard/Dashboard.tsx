@@ -21,6 +21,7 @@ import { StatusBadge, SourcePill } from '@/components/common/StatusBadge'
 import { inRange, relativeAgo, relativeDays } from '@/lib/dates'
 import { pipelineOrder, statusMeta } from '@/lib/status'
 import FollowUpSettings from './FollowUpSettings'
+import RoleSearchCard from './RoleSearchCard'
 
 export default function Dashboard() {
   const journeys = useJourneys()
@@ -63,7 +64,7 @@ export default function Dashboard() {
   const alerts = useMemo(
     () =>
       journeys
-        .filter((j) => j.stale)
+        .filter((j) => j.stale && j.status !== 'needs_role')
         .sort((a, b) => {
           // Already chased drops to the bottom, then most overdue first.
           const chased = (x: typeof a) => (x.daysSinceFollowUp === null ? -1 : x.daysSinceFollowUp)
@@ -78,7 +79,7 @@ export default function Dashboard() {
   const activeList = useMemo(
     () =>
       cohort
-        .filter((j) => j.active)
+        .filter((j) => j.active && j.status !== 'needs_role')
         // Furthest along first: the reverse of the pipeline order, so Offer
         // extended sits on top and Calendly sent at the bottom.
         .sort(
@@ -168,7 +169,7 @@ export default function Dashboard() {
                             {j.candidate.role?.company} · {statusMeta(j.status).label}
                           </span>
                           {chased && (
-                            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
+                            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[0.6875rem] font-medium text-emerald-700">
                               <Check className="h-3 w-3" />
                               Followed up {relativeAgo(j.daysSinceFollowUp as number)}
                               {j.lastFollowUp?.author ? ` · ${j.lastFollowUp.author}` : ''}
@@ -187,7 +188,7 @@ export default function Dashboard() {
                           </span>
                           <button
                             onClick={() => logFollowUp(j.candidate.id, new Date())}
-                            className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-zinc-600 transition hover:border-zinc-400 hover:text-zinc-900"
+                            className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-1.5 py-0.5 text-[0.6875rem] font-medium text-zinc-600 transition hover:border-zinc-400 hover:text-zinc-900"
                             title="Log that you chased this candidate today"
                           >
                             <BellRing className="h-3 w-3" />
@@ -256,43 +257,49 @@ export default function Dashboard() {
         </section>
       </div>
 
-      {/* Roles ------------------------------------------------------------- */}
-      <section className="rounded-xl border border-zinc-200 bg-white">
-        <header className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
-          <h2 className="text-sm font-semibold text-zinc-900">Roles</h2>
-          <button
-            onClick={() => setTab('roles')}
-            className="inline-flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-900"
-          >
-            See all <ArrowRight className="h-3 w-3" />
-          </button>
-        </header>
-        <div className="grid grid-cols-1 gap-px bg-zinc-100 sm:grid-cols-2 lg:grid-cols-4">
-          {topRoles.map((role) => (
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+        <RoleSearchCard journeys={journeys} />
+
+        {/* Roles ------------------------------------------------------------ */}
+        <section className="rounded-xl border border-zinc-200 bg-white xl:col-span-2">
+          <header className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+            <h2 className="text-sm font-semibold text-zinc-900">Roles</h2>
             <button
-              key={role.id}
-              onClick={() => openRole(role.id)}
-              className="bg-white p-4 text-left transition-colors hover:bg-zinc-50"
+              onClick={() => setTab('roles')}
+              className="inline-flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-zinc-900"
             >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-zinc-900">{role.job_title}</div>
-                  <div className="truncate text-xs text-zinc-400">{role.company}</div>
-                </div>
-                <SourcePill source={role.source} />
-              </div>
-              <div className="mt-3 flex items-center justify-between text-xs">
-                <span className="text-zinc-500">
-                  {role.candidateCount} candidate{role.candidateCount === 1 ? '' : 's'}
-                </span>
-                <span className="font-medium tabular-nums text-zinc-900">
-                  {role.bounty ? `$${role.bounty.toLocaleString()}` : '—'}
-                </span>
-              </div>
+              See all <ArrowRight className="h-3 w-3" />
             </button>
-          ))}
-        </div>
-      </section>
+          </header>
+          <div className="max-h-[420px] grid grid-cols-1 gap-px overflow-y-auto bg-zinc-100 sm:grid-cols-2">
+            {topRoles.map((role) => (
+              <button
+                key={role.id}
+                onClick={() => openRole(role.id)}
+                className="bg-white p-4 text-left transition-colors hover:bg-zinc-50"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-zinc-900">
+                      {role.job_title}
+                    </div>
+                    <div className="truncate text-xs text-zinc-400">{role.company}</div>
+                  </div>
+                  <SourcePill source={role.source} />
+                </div>
+                <div className="mt-3 flex items-center justify-between text-xs">
+                  <span className="text-zinc-500">
+                    {role.candidateCount} candidate{role.candidateCount === 1 ? '' : 's'}
+                  </span>
+                  <span className="font-medium tabular-nums text-zinc-900">
+                    {role.bounty ? `$${role.bounty.toLocaleString()}` : '—'}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      </div>
 
       <FollowUpSettings open={rulesOpen} onClose={() => setRulesOpen(false)} />
     </div>

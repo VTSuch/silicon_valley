@@ -162,7 +162,7 @@ export default function PipelineValueChart({
               {money(active.inPlay)}
             </span>
           </div>
-          <div className="mt-0.5 flex items-baseline justify-between gap-2 text-[11px] text-zinc-500">
+          <div className="mt-0.5 flex items-baseline justify-between gap-2 text-[0.6875rem] text-zinc-500">
             <span>
               {active.contributors.length} candidate
               {active.contributors.length === 1 ? '' : 's'} in play
@@ -180,7 +180,7 @@ export default function PipelineValueChart({
                       e.preventDefault()
                       onSelectCandidate?.(c.id)
                     }}
-                    className="flex w-full items-baseline justify-between gap-2 rounded px-1 py-0.5 text-left text-[11px] hover:bg-zinc-50"
+                    className="flex w-full items-baseline justify-between gap-2 rounded px-1 py-0.5 text-left text-[0.6875rem] hover:bg-zinc-50"
                   >
                     <span className="min-w-0 truncate text-zinc-700">
                       {c.name}{' '}

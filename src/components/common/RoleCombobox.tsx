@@ -10,6 +10,8 @@ interface RoleComboboxProps {
   onChange: (roleId: string) => void
   /** When given, the list offers a "+ New role" entry. */
   onCreateNew?: () => void
+  /** Offer an explicit "No role yet" entry that clears the selection. */
+  allowNone?: boolean
   placeholder?: string
 }
 
@@ -22,6 +24,7 @@ export default function RoleCombobox({
   value,
   onChange,
   onCreateNew,
+  allowNone,
   placeholder = 'Search a role or company…',
 }: RoleComboboxProps) {
   const [open, setOpen] = useState(false)
@@ -119,7 +122,9 @@ export default function RoleCombobox({
               <span className="text-zinc-400"> · {selected.company}</span>
             </span>
           ) : (
-            <span className="text-zinc-400">{placeholder}</span>
+            <span className="text-zinc-400">
+              {allowNone ? 'No role yet — looking for one' : placeholder}
+            </span>
           )}
           <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400" />
         </button>
@@ -147,6 +152,26 @@ export default function RoleCombobox({
               {role.id === value && <Check className="h-4 w-4 shrink-0 text-zinc-900" />}
             </button>
           ))}
+
+          {allowNone && (
+            <button
+              type="button"
+              onClick={() => {
+                onChange('')
+                setOpen(false)
+                setQuery('')
+              }}
+              className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm ${
+                value === '' ? 'font-medium text-zinc-900' : 'text-zinc-600'
+              } hover:bg-zinc-50`}
+            >
+              <span className="flex items-center gap-2">
+                <Search className="h-4 w-4 text-zinc-400" />
+                No role yet — looking for one
+              </span>
+              {value === '' && <Check className="h-4 w-4 shrink-0 text-zinc-900" />}
+            </button>
+          )}
 
           {matches.length === 0 && (
             <p className="px-3 py-4 text-center text-xs text-zinc-400">

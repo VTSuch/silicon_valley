@@ -6,18 +6,53 @@ import { buildJourneys } from '@/lib/journey'
 import { RoleWithCount } from '@/types'
 
 export function useRoles() {
-  const { roles, loading, createRole, updateRole, deleteRole, candidates } = useData()
+  const {
+    roles,
+    activeRoles,
+    loading,
+    createRole,
+    updateRole,
+    archiveRole,
+    restoreRole,
+    deleteRole,
+    candidates,
+  } = useData()
+
+  /** How many candidates point at each role, archived ones included. */
+  const counts = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const c of candidates) {
+      if (!c.role_id) continue
+      map.set(c.role_id, (map.get(c.role_id) ?? 0) + 1)
+    }
+    return map
+  }, [candidates])
 
   const rolesWithCount = useMemo<RoleWithCount[]>(
-    () =>
-      roles.map((role) => ({
-        ...role,
-        candidateCount: candidates.filter((c) => c.role_id === role.id).length,
-      })),
-    [roles, candidates]
+    () => activeRoles.map((role) => ({ ...role, candidateCount: counts.get(role.id) ?? 0 })),
+    [activeRoles, counts]
   )
 
-  return { roles, rolesWithCount, loading, createRole, updateRole, deleteRole }
+  const archivedWithCount = useMemo<RoleWithCount[]>(
+    () =>
+      roles
+        .filter((r) => r.archived_at)
+        .map((role) => ({ ...role, candidateCount: counts.get(role.id) ?? 0 })),
+    [roles, counts]
+  )
+
+  return {
+    roles,
+    activeRoles,
+    rolesWithCount,
+    archivedWithCount,
+    loading,
+    createRole,
+    updateRole,
+    archiveRole,
+    restoreRole,
+    deleteRole,
+  }
 }
 
 export function useCandidates() {

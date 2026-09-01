@@ -17,16 +17,15 @@ import AddRoleModal from '../roles/AddRoleModal'
 
 export default function AppShell() {
   const { user } = useAuth()
-  const { tab } = useUI()
+  const { tab, openAddCandidate, addCandidateOpen, closeAddCandidate } = useUI()
   const { loading, error } = useData()
-  const [addCandidate, setAddCandidate] = useState(false)
   const [addRole, setAddRole] = useState(false)
 
   return (
     <div className="min-h-screen bg-zinc-50">
       <TopNav
         userEmail={user?.email ?? ''}
-        onAddCandidate={() => setAddCandidate(true)}
+        onAddCandidate={() => openAddCandidate()}
         onAddRole={() => setAddRole(true)}
       />
 
@@ -42,7 +41,7 @@ export default function AppShell() {
           <>
             {tab === 'dashboard' && <Dashboard />}
             {tab === 'pipeline' && <Pipeline />}
-            {tab === 'candidates' && <Candidates onAdd={() => setAddCandidate(true)} />}
+            {tab === 'candidates' && <Candidates onAdd={() => openAddCandidate()} />}
             {tab === 'roles' && <Roles onAdd={() => setAddRole(true)} />}
             {tab === 'metrics' && <Metrics />}
           </>
@@ -51,7 +50,7 @@ export default function AppShell() {
 
       <CandidateDrawer />
       <RoleDrawer />
-      <AddCandidateModal open={addCandidate} onClose={() => setAddCandidate(false)} />
+      <AddCandidateModal open={addCandidateOpen} onClose={closeAddCandidate} />
       <AddRoleModal open={addRole} onClose={() => setAddRole(false)} />
     </div>
   )

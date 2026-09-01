@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Plus, Search } from 'lucide-react'
+import { Archive, Plus, Search } from 'lucide-react'
 import { useRoles } from '@/hooks/useData'
 import { useJourneys } from '@/hooks/useData'
 import { useUI } from '@/context/UIContext'
@@ -15,30 +15,32 @@ const WORK_MODE: Record<string, string> = {
 }
 
 export default function Roles({ onAdd }: { onAdd: () => void }) {
-  const { rolesWithCount } = useRoles()
+  const { rolesWithCount, archivedWithCount } = useRoles()
   const journeys = useJourneys()
   const { openRole } = useUI()
   const [query, setQuery] = useState('')
+  const [showArchived, setShowArchived] = useState(false)
 
   const activeByRole = useMemo(() => {
     const map = new Map<string, number>()
     for (const j of journeys) {
-      if (!j.active) continue
+      if (!j.active || !j.candidate.role_id) continue
       map.set(j.candidate.role_id, (map.get(j.candidate.role_id) ?? 0) + 1)
     }
     return map
   }, [journeys])
 
   const rows = useMemo(() => {
+    const source = showArchived ? archivedWithCount : rolesWithCount
     const q = query.trim().toLowerCase()
-    if (!q) return rolesWithCount
-    return rolesWithCount.filter(
+    if (!q) return source
+    return source.filter(
       (r) =>
         r.job_title.toLowerCase().includes(q) ||
         r.company.toLowerCase().includes(q) ||
         (r.location ?? '').toLowerCase().includes(q)
     )
-  }, [rolesWithCount, query])
+  }, [rolesWithCount, archivedWithCount, showArchived, query])
 
   const salary = (min?: number, max?: number) => {
     if (!min && !max) return '—'
@@ -51,7 +53,9 @@ export default function Roles({ onAdd }: { onAdd: () => void }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-zinc-900">Roles</h1>
-          <p className="text-sm text-zinc-500">{rows.length} open roles</p>
+          <p className="text-sm text-zinc-500">
+            {rows.length} {showArchived ? 'archived' : 'open'} role{rows.length === 1 ? '' : 's'}
+          </p>
         </div>
         <button
           onClick={onAdd}
@@ -62,14 +66,38 @@ export default function Roles({ onAdd }: { onAdd: () => void }) {
         </button>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search role, company or location…"
-          className="w-full rounded-lg border border-zinc-200 bg-white py-2 pl-9 pr-3 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-zinc-400"
-        />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative max-w-sm flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search role, company or location…"
+            className="w-full rounded-lg border border-zinc-200 bg-white py-2 pl-9 pr-3 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-zinc-400"
+          />
+        </div>
+
+        {archivedWithCount.length > 0 && (
+          <div className="flex items-center gap-1 rounded-lg bg-zinc-100 p-0.5 text-sm">
+            <button
+              onClick={() => setShowArchived(false)}
+              className={`rounded-md px-2.5 py-1 font-medium transition ${
+                !showArchived ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'
+              }`}
+            >
+              Open
+            </button>
+            <button
+              onClick={() => setShowArchived(true)}
+              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 font-medium transition ${
+                showArchived ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'
+              }`}
+            >
+              <Archive className="h-3.5 w-3.5" />
+              Archived {archivedWithCount.length}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
@@ -115,7 +143,7 @@ export default function Roles({ onAdd }: { onAdd: () => void }) {
                     <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
                       <span className="font-medium text-zinc-900">{role.candidateCount}</span>
                       {(activeByRole.get(role.id) ?? 0) > 0 && (
-                        <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                        <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[0.625rem] font-medium text-emerald-700">
                           {activeByRole.get(role.id)} live
                         </span>
                       )}
@@ -129,7 +157,7 @@ export default function Roles({ onAdd }: { onAdd: () => void }) {
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-4 py-12 text-center text-sm text-zinc-400">
-                    No roles yet.
+                    {showArchived ? 'No archived roles.' : 'No roles yet.'}
                   </td>
                 </tr>
               )}

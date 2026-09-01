@@ -18,7 +18,7 @@ import { useData } from '@/context/DataContext'
 import { useJourneys } from '@/hooks/useData'
 import { useUI } from '@/context/UIContext'
 import { Journey } from '@/lib/journey'
-import { BOARD_COLUMNS, BoardColumn, PIPELINE_STATUSES, midStep } from '@/lib/status'
+import { BOARD_COLUMNS, BoardColumn, midStep, rejectionFor, statusMeta } from '@/lib/status'
 import { relativeAgo, relativeDays, toDateInput, fromDateInput } from '@/lib/dates'
 import DateInput from '@/components/common/DateInput'
 
@@ -35,7 +35,7 @@ export default function Pipeline() {
   const columns = useMemo(() => {
     const q = query.trim().toLowerCase()
     const visible = journeys.filter((j) => {
-      if (!PIPELINE_STATUSES.includes(j.status)) return false
+      if (!BOARD_COLUMNS.some((c) => c.statuses.includes(j.status))) return false
       if (!q) return true
       return (
         j.candidate.full_name.toLowerCase().includes(q) ||
@@ -62,7 +62,8 @@ export default function Pipeline() {
     // Dropping into the column a card already sits in is a no-op — moving
     // between mid steps happens in the candidate panel.
     if (column.statuses.includes(journey.status)) return
-    await setStatus(id, column.entry, fromDateInput(moveDate))
+    const target = column.id === 'lost' ? rejectionFor(journey.status) : column.entry
+    await setStatus(id, target, fromDateInput(moveDate))
   }
 
   const onDragStart = (event: DragStartEvent) => {
@@ -159,7 +160,7 @@ function Column({
         </span>
       </div>
       {value > 0 && (
-        <div className="px-3 pb-2 text-[11px] tabular-nums text-zinc-400">
+        <div className="px-3 pb-2 text-[0.6875rem] tabular-nums text-zinc-400">
           ${value.toLocaleString()} in play
         </div>
       )}
@@ -196,14 +197,19 @@ function Card({ journey, onOpen }: { journey: Journey; onOpen: (id: string) => v
           {journey.candidate.role?.job_title}
         </span>
         {midStep(journey.status) > 0 && (
-          <span className="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+          <span className="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[0.625rem] font-semibold text-amber-700">
             Mid {midStep(journey.status)}
+          </span>
+        )}
+        {statusMeta(journey.status).group === 'lost' && (
+          <span className="shrink-0 rounded bg-red-50 px-1.5 py-0.5 text-[0.625rem] font-semibold text-red-700">
+            {statusMeta(journey.status).short}
           </span>
         )}
       </div>
       <div className="mt-2 flex items-center justify-between gap-2">
         <span
-          className={`inline-flex items-center gap-1 text-[11px] ${
+          className={`inline-flex items-center gap-1 text-[0.6875rem] ${
             journey.stale
               ? journey.daysSinceFollowUp !== null
                 ? 'font-medium text-emerald-600'
@@ -225,7 +231,7 @@ function Card({ journey, onOpen }: { journey: Journey; onOpen: (id: string) => v
           {relativeDays(journey.daysInStatus)}
         </span>
         {journey.bounty > 0 && (
-          <span className="text-[11px] tabular-nums text-zinc-500">
+          <span className="text-[0.6875rem] tabular-nums text-zinc-500">
             ${journey.bounty.toLocaleString()}
           </span>
         )}

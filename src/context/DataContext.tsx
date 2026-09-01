@@ -21,16 +21,22 @@ import {
 import { FOLLOW_UP_KEY, FollowUpRules, parseRules } from '@/lib/settings'
 
 type CreateRoleInput = Omit<Role, 'id' | 'created_at'>
-type UpdateRoleInput = Partial<CreateRoleInput>
+type UpdateRoleInput = Partial<CreateRoleInput> & { archived_at?: string | null }
 
 type CandidateFields = Pick<
   Candidate,
-  'full_name' | 'email' | 'role_id' | 'status' | 'linkedin_url' | 'notes' | 'hired_salary'
+  | 'full_name'
+  | 'email'
+  | 'role_id'
+  | 'status'
+  | 'linkedin_url'
+  | 'notes'
+  | 'hired_salary'
+  | 'next_search_at'
 >
 type UpdateCandidateInput = Partial<CandidateFields>
 
 interface DataContextValue {
-  roles: Role[]
   candidates: CandidateWithRole[]
   statusEvents: StatusEvent[]
   followUps: FollowUp[]
@@ -40,8 +46,17 @@ interface DataContextValue {
   error: string | null
   refresh: () => Promise<void>
 
+  roles: Role[]
+  /** Roles still on offer: everything not archived. */
+  activeRoles: Role[]
   createRole: (role: CreateRoleInput) => Promise<Role>
   updateRole: (id: string, updates: UpdateRoleInput) => Promise<Role>
+  /**
+   * Hides the role. A role with candidates is archived rather than deleted,
+   * so those candidates keep the role they were submitted to.
+   */
+  archiveRole: (id: string) => Promise<void>
+  restoreRole: (id: string) => Promise<void>
   deleteRole: (id: string) => Promise<void>
 
   createCandidate: (
@@ -270,11 +285,25 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     return role
   }, [])
 
+  const archiveRole = useCallback(
+    async (id: string) => {
+      await updateRole(id, { archived_at: new Date().toISOString() })
+    },
+    [updateRole]
+  )
+
+  const restoreRole = useCallback(
+    async (id: string) => {
+      await updateRole(id, { archived_at: null })
+    },
+    [updateRole]
+  )
+
+  /** Only ever used on a role nobody was submitted to. */
   const deleteRole = useCallback(async (id: string) => {
     const { error } = await supabase.from('roles').delete().eq('id', id)
     if (error) throw error
     setRoles((prev) => prev.filter((r) => r.id !== id))
-    setCandidates((prev) => prev.filter((c) => c.role_id !== id))
   }, [])
 
   // --- status history -------------------------------------------------------
@@ -373,9 +402,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [addStatusEvent, updateCandidate]
   )
 
+  const activeRoles = useMemo(() => roles.filter((r) => !r.archived_at), [roles])
+
   const value = useMemo<DataContextValue>(
     () => ({
       roles,
+      activeRoles,
       candidates,
       statusEvents,
       followUps,
@@ -386,6 +418,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       refresh,
       createRole,
       updateRole,
+      archiveRole,
+      restoreRole,
       deleteRole,
       createCandidate,
       updateCandidate,
@@ -407,8 +441,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       loading,
       error,
       refresh,
+      activeRoles,
       createRole,
       updateRole,
+      archiveRole,
+      restoreRole,
       deleteRole,
       createCandidate,
       updateCandidate,

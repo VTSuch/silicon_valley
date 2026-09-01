@@ -15,6 +15,11 @@
   --font-mono: var(--font-geist-mono);
 }
 
+html {
+  /* Everything is sized in rem, so the whole UI scales from this one knob. */
+  font-size: 90%;
+}
+
 html,
 body {
   background: #fafafa;

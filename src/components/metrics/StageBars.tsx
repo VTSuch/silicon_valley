@@ -32,7 +32,7 @@ export default function StageBars({ buckets }: { buckets: MonthBucket[] }) {
     <div className="relative">
       <div className="flex gap-4">
         {/* y axis */}
-        <div className="flex w-8 flex-col justify-between py-1 text-right text-[10px] tabular-nums text-zinc-400">
+        <div className="flex w-8 flex-col justify-between py-1 text-right text-[0.625rem] tabular-nums text-zinc-400">
           {[1, 0.75, 0.5, 0.25, 0].map((f) => (
             <span key={f}>{Math.round(max * f)}</span>
           ))}
@@ -84,7 +84,7 @@ export default function StageBars({ buckets }: { buckets: MonthBucket[] }) {
             {buckets.map((b, i) => (
               <div
                 key={b.label}
-                className={`min-w-[28px] flex-1 text-center text-[10px] ${
+                className={`min-w-[28px] flex-1 text-center text-[0.625rem] ${
                   hover === i ? 'font-semibold text-zinc-900' : 'text-zinc-400'
                 }`}
               >

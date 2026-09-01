@@ -49,6 +49,12 @@ export const STATUS_META: Record<CandidateStatus, StatusMeta> = {
     dot: 'bg-indigo-500', badge: 'bg-indigo-50 text-indigo-700 ring-indigo-600/20',
     column: 'bg-indigo-500',
   },
+  needs_role: {
+    id: 'needs_role', label: 'Needs a role', short: 'Needs role', group: 'lead', rank: 0,
+    active: true, staleAfterDays: 14,
+    dot: 'bg-fuchsia-500', badge: 'bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-600/20',
+    column: 'bg-fuchsia-500',
+  },
   standby: {
     id: 'standby', label: 'Standby', short: 'Standby', group: 'lead', rank: 0,
     active: true, staleAfterDays: 21,
@@ -161,7 +167,27 @@ export const BOARD_COLUMNS: BoardColumn[] = [
   { id: 'final', label: 'Final stage', statuses: ['final_interview'], entry: 'final_interview', color: 'bg-orange-500' },
   { id: 'offer', label: 'Offer extended', statuses: ['offer'], entry: 'offer', color: 'bg-rose-500' },
   { id: 'hired', label: 'Hired', statuses: ['offer_accepted'], entry: 'offer_accepted', color: 'bg-emerald-500' },
+  {
+    id: 'lost',
+    label: 'Rejected / Dropped',
+    statuses: ['cv_rejected', 'client_rejected', 'offer_rejected', 'candidate_quit'],
+    entry: 'client_rejected',
+    color: 'bg-red-400',
+  },
 ]
+
+/**
+ * Which rejection a candidate lands on when dropped in the Rejected column.
+ * The column groups several outcomes, so pick the one that matches where
+ * they were: a rejection right after submitting is the submission being
+ * turned down, one at the offer stage is the offer being turned down.
+ */
+export function rejectionFor(status: string): CandidateStatus {
+  const meta = statusMeta(status)
+  if (meta.group === 'submitted' || meta.group === 'lead') return 'cv_rejected'
+  if (meta.group === 'offer') return 'offer_rejected'
+  return 'client_rejected'
+}
 
 /**
  * Where a status sits in the funnel, by its position in PIPELINE_STATUSES.
@@ -184,7 +210,14 @@ export const CLOSED_STATUSES: CandidateStatus[] = [
   'candidate_quit',
 ]
 
-export const ALL_STATUSES: CandidateStatus[] = [...PIPELINE_STATUSES, ...CLOSED_STATUSES]
+/** Stages outside the client pipeline but still worth tracking. */
+export const EXTRA_STATUSES: CandidateStatus[] = ['needs_role']
+
+export const ALL_STATUSES: CandidateStatus[] = [
+  ...PIPELINE_STATUSES,
+  ...EXTRA_STATUSES,
+  ...CLOSED_STATUSES,
+]
 
 /** Legacy rows in the database predate the current enum. */
 const LEGACY: Record<string, CandidateStatus> = {

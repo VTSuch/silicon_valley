@@ -5,14 +5,22 @@ import {
   AlertTriangle,
   BellRing,
   Check,
+  ChevronDown,
   Clock,
+  Copy,
   ExternalLink,
+  FileText,
+  Link2,
   Loader2,
   Pencil,
   Plus,
+  Search,
   Trash2,
 } from 'lucide-react'
 import Drawer from '@/components/common/Drawer'
+import DateInput from '@/components/common/DateInput'
+import RoleCombobox from '@/components/common/RoleCombobox'
+import RemindInMenu from '@/components/common/RemindInMenu'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { Field, GhostButton, PrimaryButton, inputClass } from '@/components/common/Field'
 import { useData } from '@/context/DataContext'
@@ -27,16 +35,22 @@ import {
   normalizeStatus,
   statusMeta,
 } from '@/lib/status'
-import { formatDate, fromDateInput, relativeAgo, relativeDays, toDateInput } from '@/lib/dates'
-import DateInput from '@/components/common/DateInput'
-import RoleCombobox from '@/components/common/RoleCombobox'
+import {
+  formatDate,
+  fromDateInput,
+  relativeAgo,
+  relativeDays,
+  toDateInput,
+} from '@/lib/dates'
+
 
 export default function CandidateDrawer() {
-  const { openCandidateId, closeCandidate, openRole } = useUI()
+  const { openCandidateId, closeCandidate, openRole, openAddCandidate } = useUI()
   const {
     candidates,
     statusEvents,
-    roles,
+    followUps,
+    activeRoles,
     setStatus,
     updateCandidate,
     deleteCandidate,
@@ -44,20 +58,23 @@ export default function CandidateDrawer() {
     deleteStatusEvent,
     logFollowUp,
     deleteFollowUp,
-    followUps,
   } = useData()
 
   const candidate = candidates.find((c) => c.id === openCandidateId) ?? null
 
   const journey = useMemo(
-    () => (candidate ? buildJourney(candidate, statusEvents) : null),
-    [candidate, statusEvents]
+    () => (candidate ? buildJourney(candidate, statusEvents, undefined, followUps) : null),
+    [candidate, statusEvents, followUps]
   )
 
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
+  const [stagesOpen, setStagesOpen] = useState(false)
   const [changeDate, setChangeDate] = useState(() => toDateInput(new Date()))
   const [selected, setSelected] = useState<CandidateStatus>('submitted')
+  const [hiredSalary, setHiredSalary] = useState('')
+  const [followUpNote, setFollowUpNote] = useState('')
+  const [followUpDate, setFollowUpDate] = useState(() => toDateInput(new Date()))
   const [form, setForm] = useState({
     full_name: '',
     email: '',
@@ -65,12 +82,10 @@ export default function CandidateDrawer() {
     role_id: '',
     notes: '',
   })
-  const [hiredSalary, setHiredSalary] = useState('')
-  const [followUpNote, setFollowUpNote] = useState('')
-  const [followUpDate, setFollowUpDate] = useState(() => toDateInput(new Date()))
 
   useEffect(() => {
     setEditing(false)
+    setStagesOpen(false)
     setChangeDate(toDateInput(new Date()))
     if (candidate) {
       setSelected(normalizeStatus(candidate.status))
@@ -78,7 +93,7 @@ export default function CandidateDrawer() {
         full_name: candidate.full_name,
         email: candidate.email,
         linkedin_url: candidate.linkedin_url ?? '',
-        role_id: candidate.role_id,
+        role_id: candidate.role_id ?? '',
         notes: candidate.notes ?? '',
       })
       setHiredSalary(candidate.hired_salary?.toString() ?? '')
@@ -89,10 +104,24 @@ export default function CandidateDrawer() {
 
   if (!candidate || !journey) return null
 
+  const isRoleSearch = journey.status === 'needs_role' || !candidate.role_id
+  const snoozedUntil = candidate.next_search_at ? new Date(candidate.next_search_at) : null
+  const snoozed = !!snoozedUntil && snoozedUntil > new Date()
+
   const addStage = async () => {
     setBusy('stage')
     try {
       await setStatus(candidate.id, selected, fromDateInput(changeDate))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const snoozeSearch = async (until: Date | null) => {
+    setBusy('snooze')
+    try {
+      await updateCandidate(candidate.id, { next_search_at: until ? until.toISOString() : null })
+      if (until) await logFollowUp(candidate.id, new Date(), 'Role search done')
     } finally {
       setBusy(null)
     }
@@ -127,7 +156,7 @@ export default function CandidateDrawer() {
         full_name: form.full_name,
         email: form.email,
         linkedin_url: form.linkedin_url || undefined,
-        role_id: form.role_id,
+        role_id: form.role_id || null,
         notes: form.notes || undefined,
       })
       setEditing(false)
@@ -147,6 +176,18 @@ export default function CandidateDrawer() {
     }
   }
 
+  /** Duplicate, or find a role for a role-search candidate. */
+  const openCopy = () => {
+    openAddCandidate({
+      full_name: candidate.full_name,
+      email: candidate.email,
+      linkedin_url: candidate.linkedin_url ?? undefined,
+      notes: candidate.notes ?? undefined,
+      sourceCandidateId: isRoleSearch ? candidate.id : undefined,
+    })
+    closeCandidate()
+  }
+
   const events = [...journey.events].reverse()
   const candidateFollowUps = followUps
     .filter((f) => f.candidate_id === candidate.id)
@@ -156,7 +197,7 @@ export default function CandidateDrawer() {
     <Drawer
       open
       onClose={closeCandidate}
-      subtitle={candidate.role?.company}
+      subtitle={candidate.role?.company ?? 'No role assigned'}
       title={candidate.full_name}
       actions={
         <>
@@ -171,6 +212,13 @@ export default function CandidateDrawer() {
               <ExternalLink className="h-4.5 w-4.5" />
             </a>
           )}
+          <button
+            onClick={openCopy}
+            className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+            title={isRoleSearch ? 'Find a role for this candidate' : 'Duplicate for another role'}
+          >
+            <Copy className="h-4.5 w-4.5" />
+          </button>
           <button
             onClick={() => setEditing((v) => !v)}
             className={`rounded-lg p-1.5 hover:bg-zinc-100 ${editing ? 'text-zinc-900' : 'text-zinc-400 hover:text-zinc-700'}`}
@@ -203,81 +251,143 @@ export default function CandidateDrawer() {
             ))}
         </div>
 
-        <button
-          onClick={() => openRole(candidate.role_id)}
-          className="w-full rounded-xl border border-zinc-200 bg-zinc-50/60 p-3 text-left transition hover:border-zinc-300 hover:bg-zinc-50"
-        >
-          <div className="text-sm font-medium text-zinc-900">{candidate.role?.job_title}</div>
-          <div className="mt-0.5 flex items-center gap-2 text-xs text-zinc-500">
-            <span>{candidate.role?.company}</span>
-            <span className="text-zinc-300">•</span>
-            <span>
-              Bounty {journey.bounty ? `$${journey.bounty.toLocaleString()}` : '—'}
-              {candidate.hired_salary && candidate.role?.bounty_pct ? (
-                <span className="text-zinc-400">
-                  {' '}
-                  ({candidate.role.bounty_pct}% of ${candidate.hired_salary.toLocaleString()})
-                </span>
-              ) : null}
-            </span>
+        {/* Role ------------------------------------------------------------ */}
+        {candidate.role_id && candidate.role ? (
+          <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <button onClick={() => openRole(candidate.role_id as string)} className="min-w-0 text-left">
+                <div className="truncate text-sm font-medium text-zinc-900">
+                  {candidate.role.job_title}
+                </div>
+                <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                  <span>{candidate.role.company}</span>
+                  <span className="text-zinc-300">•</span>
+                  <span>Bounty {journey.bounty ? `$${journey.bounty.toLocaleString()}` : '—'}</span>
+                  {candidate.hired_salary && candidate.role.bounty_pct ? (
+                    <span className="text-zinc-400">
+                      ({candidate.role.bounty_pct}% of ${candidate.hired_salary.toLocaleString()})
+                    </span>
+                  ) : null}
+                </div>
+              </button>
+
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                {candidate.role.paraform_link && (
+                  <a
+                    href={candidate.role.paraform_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[0.6875rem] font-medium text-zinc-600 hover:border-zinc-400 hover:text-zinc-900"
+                  >
+                    <Link2 className="h-3 w-3" />
+                    Paraform
+                  </a>
+                )}
+                {candidate.role.job_description_link && (
+                  <a
+                    href={candidate.role.job_description_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[0.6875rem] font-medium text-zinc-600 hover:border-zinc-400 hover:text-zinc-900"
+                  >
+                    <FileText className="h-3 w-3" />
+                    Job description
+                  </a>
+                )}
+              </div>
+            </div>
           </div>
-        </button>
+        ) : (
+          <div className="rounded-xl border border-dashed border-fuchsia-300 bg-fuchsia-50/40 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-zinc-900">No role assigned</div>
+                <div className="mt-0.5 text-xs text-zinc-500">
+                  {snoozed
+                    ? `Search again from ${formatDate(snoozedUntil)}`
+                    : 'Showing in the role search list'}
+                </div>
+              </div>
+              <GhostButton onClick={openCopy} className="shrink-0">
+                <Search className="h-3.5 w-3.5" />
+                Assign a role
+              </GhostButton>
+            </div>
+          </div>
+        )}
+
+        {/* Role search ----------------------------------------------------- */}
+        {isRoleSearch && (
+          <section className="rounded-xl border border-zinc-200 p-3">
+            <h3 className="text-sm font-semibold text-zinc-900">Role search</h3>
+            <p className="mb-2 text-xs text-zinc-500">
+              {snoozed
+                ? `Hidden from the search list until ${formatDate(snoozedUntil)}.`
+                : 'Searched and found nothing? Push the next reminder out instead of leaving it nagging.'}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <RemindInMenu
+                onPick={(until) => snoozeSearch(until)}
+                disabled={busy !== null}
+                label={snoozed ? 'Change reminder' : 'Searched — remind in'}
+              />
+              <label className="flex items-center gap-2 text-xs text-zinc-500">
+                or from
+                <DateInput
+                  value={snoozedUntil ?? new Date()}
+                  onChange={(next) => snoozeSearch(fromDateInput(next))}
+                  className="rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-900 outline-none focus:border-zinc-400"
+                />
+              </label>
+              {snoozed && (
+                <button
+                  onClick={() => snoozeSearch(null)}
+                  disabled={busy !== null}
+                  className="text-xs font-medium text-zinc-500 underline underline-offset-2 hover:text-zinc-900"
+                >
+                  Search now
+                </button>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* Move stage ------------------------------------------------------ */}
-        <section className="rounded-xl border border-zinc-200 p-3">
-          <h3 className="mb-2 text-sm font-semibold text-zinc-900">Move to stage</h3>
+        <section className="rounded-xl border border-zinc-200">
+          <button
+            onClick={() => setStagesOpen((v) => !v)}
+            className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
+          >
+            <span className="text-sm font-semibold text-zinc-900">Move to stage</span>
+            <span className="flex items-center gap-2">
+              <StatusBadge status={journey.status} />
+              <ChevronDown
+                className={`h-4 w-4 text-zinc-400 transition-transform ${stagesOpen ? 'rotate-180' : ''}`}
+              />
+            </span>
+          </button>
 
-          <div className="flex flex-wrap gap-1.5">
-            {BOARD_COLUMNS.map((col) => {
-              const picked = col.statuses.includes(selected)
-              const current = col.statuses.includes(journey.status)
-              return (
-                <button
-                  key={col.id}
-                  onClick={() => setSelected(current ? journey.status : col.entry)}
-                  className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${
-                    picked
-                      ? 'border-zinc-900 bg-zinc-900 text-white'
-                      : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50'
-                  }`}
-                >
-                  <span className={`h-1.5 w-1.5 rounded-full ${picked ? 'bg-white' : col.color}`} />
-                  {col.label}
-                  {current && (
-                    <span
-                      className={`rounded px-1 text-[10px] ${picked ? 'bg-white/20' : 'bg-zinc-100 text-zinc-500'}`}
-                    >
-                      now
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Mid stages collapse into one column on the board, so the
-              individual steps live here — a company can run three of them. */}
-          {(midStep(selected) > 0 || midStep(journey.status) > 0) && (
-            <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/50 p-2.5">
-              <div className="mb-1.5 text-[11px] font-medium text-amber-800">Mid stage steps</div>
+          {stagesOpen && (
+            <div className="border-t border-zinc-100 p-3">
               <div className="flex flex-wrap gap-1.5">
-                {MID_STATUSES.map((mid, i) => {
-                  const picked = mid === selected
-                  const current = mid === journey.status
+                {BOARD_COLUMNS.map((col) => {
+                  const picked = col.statuses.includes(selected)
+                  const current = col.statuses.includes(journey.status)
                   return (
                     <button
-                      key={mid}
-                      onClick={() => setSelected(mid)}
-                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition ${
+                      key={col.id}
+                      onClick={() => setSelected(current ? journey.status : col.entry)}
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${
                         picked
-                          ? 'border-amber-500 bg-amber-500 text-white'
-                          : 'border-amber-200 bg-white text-zinc-600 hover:border-amber-400 hover:text-zinc-900'
+                          ? 'border-zinc-900 bg-zinc-900 text-white'
+                          : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50'
                       }`}
                     >
-                      Mid {i + 1}
+                      <span className={`h-1.5 w-1.5 rounded-full ${picked ? 'bg-white' : col.color}`} />
+                      {col.label}
                       {current && (
                         <span
-                          className={`rounded px-1 text-[10px] ${picked ? 'bg-white/25' : 'bg-amber-100 text-amber-700'}`}
+                          className={`rounded px-1 text-[0.625rem] ${picked ? 'bg-white/20' : 'bg-zinc-100 text-zinc-500'}`}
                         >
                           now
                         </span>
@@ -286,61 +396,95 @@ export default function CandidateDrawer() {
                   )
                 })}
               </div>
+
+              {(midStep(selected) > 0 || midStep(journey.status) > 0) && (
+                <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/50 p-2.5">
+                  <div className="mb-1.5 text-[0.6875rem] font-medium text-amber-800">
+                    Mid stage steps
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {MID_STATUSES.map((mid, i) => {
+                      const picked = mid === selected
+                      const current = mid === journey.status
+                      return (
+                        <button
+                          key={mid}
+                          onClick={() => setSelected(mid)}
+                          className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition ${
+                            picked
+                              ? 'border-amber-500 bg-amber-500 text-white'
+                              : 'border-amber-200 bg-white text-zinc-600 hover:border-amber-400 hover:text-zinc-900'
+                          }`}
+                        >
+                          Mid {i + 1}
+                          {current && (
+                            <span
+                              className={`rounded px-1 text-[0.625rem] ${picked ? 'bg-white/25' : 'bg-amber-100 text-amber-700'}`}
+                            >
+                              now
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {[...CLOSED_STATUSES, 'needs_role' as CandidateStatus].map((st) => {
+                  const picked = st === selected
+                  const current = st === journey.status
+                  const meta = statusMeta(st)
+                  return (
+                    <button
+                      key={st}
+                      onClick={() => setSelected(st)}
+                      className={`inline-flex items-center gap-1.5 rounded-lg border border-dashed px-2.5 py-1.5 text-xs font-medium transition ${
+                        picked
+                          ? 'border-zinc-900 bg-zinc-900 text-white'
+                          : 'border-zinc-300 bg-white text-zinc-500 hover:border-zinc-400 hover:text-zinc-800'
+                      }`}
+                    >
+                      <span className={`h-1.5 w-1.5 rounded-full ${picked ? 'bg-white' : meta.dot}`} />
+                      {meta.label}
+                      {current && (
+                        <span
+                          className={`rounded px-1 text-[0.625rem] ${picked ? 'bg-white/20' : 'bg-zinc-100 text-zinc-500'}`}
+                        >
+                          now
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-zinc-100 pt-3">
+                <label className="mr-auto flex items-center gap-2 text-xs text-zinc-500">
+                  Date
+                  <DateInput
+                    eager
+                    value={changeDate}
+                    onChange={setChangeDate}
+                    className="rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-900 outline-none focus:border-zinc-400"
+                  />
+                </label>
+                <PrimaryButton onClick={addStage} disabled={busy !== null} className="py-1.5 text-xs">
+                  {busy === 'stage' ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="h-3.5 w-3.5" />
+                  )}
+                  Add stage
+                </PrimaryButton>
+              </div>
+              <p className="mt-1.5 text-right text-[0.6875rem] text-zinc-400">
+                Adds {statusMeta(selected).label} on the date above — even if it is already the
+                current stage.
+              </p>
             </div>
           )}
-
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {CLOSED_STATUSES.map((st) => {
-              const picked = st === selected
-              const current = st === journey.status
-              const meta = statusMeta(st)
-              return (
-                <button
-                  key={st}
-                  onClick={() => setSelected(st)}
-                  className={`inline-flex items-center gap-1.5 rounded-lg border border-dashed px-2.5 py-1.5 text-xs font-medium transition ${
-                    picked
-                      ? 'border-zinc-900 bg-zinc-900 text-white'
-                      : 'border-zinc-300 bg-white text-zinc-500 hover:border-zinc-400 hover:text-zinc-800'
-                  }`}
-                >
-                  <span className={`h-1.5 w-1.5 rounded-full ${picked ? 'bg-white' : meta.dot}`} />
-                  {meta.label}
-                  {current && (
-                    <span
-                      className={`rounded px-1 text-[10px] ${picked ? 'bg-white/20' : 'bg-zinc-100 text-zinc-500'}`}
-                    >
-                      now
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-zinc-100 pt-3">
-            <label className="mr-auto flex items-center gap-2 text-xs text-zinc-500">
-              Date
-              <DateInput
-                eager
-                value={changeDate}
-                onChange={setChangeDate}
-                className="rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-900 outline-none focus:border-zinc-400"
-              />
-            </label>
-            <PrimaryButton onClick={addStage} disabled={busy !== null} className="py-1.5 text-xs">
-              {busy === 'stage' ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Plus className="h-3.5 w-3.5" />
-              )}
-              Add stage
-            </PrimaryButton>
-          </div>
-          <p className="mt-1.5 text-right text-[11px] text-zinc-400">
-            Adds {statusMeta(selected).label} on the date above — even if it is already the
-            current stage.
-          </p>
         </section>
 
         {/* Hired salary ---------------------------------------------------- */}
@@ -406,11 +550,12 @@ export default function CandidateDrawer() {
                   onChange={(e) => setForm({ ...form, linkedin_url: e.target.value })}
                 />
               </Field>
-              <Field label="Role">
+              <Field label="Role" hint="Leave empty to keep looking for one.">
                 <RoleCombobox
-                  roles={roles}
+                  roles={activeRoles}
                   value={form.role_id}
                   onChange={(role_id) => setForm({ ...form, role_id })}
+                  allowNone
                 />
               </Field>
               <Field label="Notes">
@@ -501,9 +646,7 @@ export default function CandidateDrawer() {
                     {f.note || 'Followed up'}
                     {f.author && <span className="text-zinc-400"> · {f.author}</span>}
                   </span>
-                  <span className="shrink-0 text-xs text-zinc-400">
-                    {formatDate(f.occurred_at)}
-                  </span>
+                  <span className="shrink-0 text-xs text-zinc-400">{formatDate(f.occurred_at)}</span>
                   <button
                     onClick={() => deleteFollowUp(f.id)}
                     className="rounded p-1 text-zinc-300 opacity-0 transition group-hover:opacity-100 hover:bg-red-50 hover:text-red-600"

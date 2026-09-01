@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, ListFilter } from 'lucide-react'
 import { CandidateStatus } from '@/types'
-import { CLOSED_STATUSES, PIPELINE_STATUSES, statusMeta } from '@/lib/status'
+import { CLOSED_STATUSES, EXTRA_STATUSES, PIPELINE_STATUSES, statusMeta } from '@/lib/status'
 
 interface Props {
   value: CandidateStatus[]
@@ -28,7 +28,7 @@ export default function StatusFilter({ value, onChange }: Props) {
 
   const group = (label: string, list: CandidateStatus[]) => (
     <div>
-      <div className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+      <div className="px-2 pb-1 pt-2 text-[0.625rem] font-semibold uppercase tracking-wide text-zinc-400">
         {label}
       </div>
       {list.map((s) => {
@@ -73,6 +73,7 @@ export default function StatusFilter({ value, onChange }: Props) {
       {open && (
         <div className="sv-fade-in absolute left-0 z-40 mt-1 max-h-96 w-56 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1.5 shadow-lg">
           {group('Pipeline', PIPELINE_STATUSES)}
+          {group('Sourcing', EXTRA_STATUSES)}
           {group('Closed', CLOSED_STATUSES)}
           {value.length > 0 && (
             <>

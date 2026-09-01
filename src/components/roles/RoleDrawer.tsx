@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Archive, ArchiveRestore, FileText, Link2, Pencil, Trash2 } from 'lucide-react'
 import Drawer from '@/components/common/Drawer'
 import { StatusBadge, SourcePill } from '@/components/common/StatusBadge'
 import { Field, GhostButton, PrimaryButton, inputClass } from '@/components/common/Field'
@@ -21,7 +21,7 @@ const SECTIONS: { key: 'description' | 'requirements' | 'skills' | 'interview_pr
 
 export default function RoleDrawer() {
   const { openRoleId, closeRole, openCandidate } = useUI()
-  const { roles, candidates, updateRole, deleteRole } = useData()
+  const { roles, candidates, updateRole, archiveRole, restoreRole, deleteRole } = useData()
   const role = roles.find((r) => r.id === openRoleId) ?? null
   const roleCandidates = candidates.filter((c) => c.role_id === openRoleId)
 
@@ -44,6 +44,8 @@ export default function RoleDrawer() {
         salary_max: role.salary_max?.toString() ?? '',
         bounty: role.bounty?.toString() ?? '',
         bounty_pct: role.bounty_pct?.toString() ?? '',
+        paraform_link: role.paraform_link ?? '',
+        job_description_link: role.job_description_link ?? '',
         description: role.description ?? '',
         requirements: role.requirements ?? '',
         skills: role.skills ?? '',
@@ -78,6 +80,8 @@ export default function RoleDrawer() {
         salary_max: form.salary_max ? Number(form.salary_max) : undefined,
         bounty: form.bounty ? Number(form.bounty) : undefined,
         bounty_pct: form.bounty_pct ? Number(form.bounty_pct) : undefined,
+        paraform_link: form.paraform_link || undefined,
+        job_description_link: form.job_description_link || undefined,
         description: form.description || undefined,
         requirements: form.requirements || undefined,
         skills: form.skills || undefined,
@@ -90,17 +94,31 @@ export default function RoleDrawer() {
     }
   }
 
+  /**
+   * Roles nobody was submitted to are deleted outright; anything with
+   * candidates is archived, so those candidates keep the role they went for.
+   */
   const remove = async () => {
-    if (
-      !confirm(
-        `Delete "${role.job_title}"? Its ${roleCandidates.length} candidate(s) will be deleted too.`
-      )
-    )
-      return
+    const hasCandidates = roleCandidates.length > 0
+    const message = hasCandidates
+      ? `Archive "${role.job_title}"? It leaves the roles list and the pickers, but its ${roleCandidates.length} candidate(s) keep it in their history.`
+      : `Delete "${role.job_title}"? No candidate was submitted to it, so nothing else is affected.`
+    if (!confirm(message)) return
+
     setBusy(true)
     try {
-      await deleteRole(role.id)
+      if (hasCandidates) await archiveRole(role.id)
+      else await deleteRole(role.id)
       closeRole()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const restore = async () => {
+    setBusy(true)
+    try {
+      await restoreRole(role.id)
     } finally {
       setBusy(false)
     }
@@ -224,6 +242,24 @@ export default function RoleDrawer() {
                 />
               </Field>
             </div>
+            <Field label="Paraform link">
+              <input
+                type="url"
+                placeholder="https://www.paraform.com/…"
+                className={inputClass}
+                value={form.paraform_link}
+                onChange={(e) => setForm({ ...form, paraform_link: e.target.value })}
+              />
+            </Field>
+            <Field label="Job description link">
+              <input
+                type="url"
+                placeholder="https://…"
+                className={inputClass}
+                value={form.job_description_link}
+                onChange={(e) => setForm({ ...form, job_description_link: e.target.value })}
+              />
+            </Field>
             {SECTIONS.map((s) => (
               <Field key={s.key} label={s.label}>
                 <textarea
@@ -254,8 +290,41 @@ export default function RoleDrawer() {
               <Stat label="Mode" value={role.work_mode} />
             </div>
 
+            {(role.paraform_link || role.job_description_link) && (
+              <div className="flex flex-wrap gap-2">
+                {role.paraform_link && (
+                  <a
+                    href={role.paraform_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 hover:border-zinc-400 hover:text-zinc-900"
+                  >
+                    <Link2 className="h-3.5 w-3.5 text-zinc-400" />
+                    Paraform
+                  </a>
+                )}
+                {role.job_description_link && (
+                  <a
+                    href={role.job_description_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-700 hover:border-zinc-400 hover:text-zinc-900"
+                  >
+                    <FileText className="h-3.5 w-3.5 text-zinc-400" />
+                    Job description
+                  </a>
+                )}
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500">
               <SourcePill source={role.source} />
+              {role.archived_at && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-600">
+                  <Archive className="h-3 w-3" />
+                  Archived {formatDate(role.archived_at)}
+                </span>
+              )}
               {role.experience && <span>Experience: {role.experience}</span>}
               <span>Added {formatDate(role.created_at)}</span>
             </div>
@@ -297,15 +366,34 @@ export default function RoleDrawer() {
               </section>
             ))}
 
-            <div className="border-t border-zinc-100 pt-4">
+            <div className="flex items-center justify-between gap-3 border-t border-zinc-100 pt-4">
               <button
                 onClick={remove}
                 disabled={busy}
                 className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
               >
-                <Trash2 className="h-3.5 w-3.5" />
-                Delete role
+                {roleCandidates.length > 0 ? (
+                  <>
+                    <Archive className="h-3.5 w-3.5" />
+                    Archive role
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete role
+                  </>
+                )}
               </button>
+              {role.archived_at && (
+                <button
+                  onClick={restore}
+                  disabled={busy}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600 hover:text-zinc-900 disabled:opacity-50"
+                >
+                  <ArchiveRestore className="h-3.5 w-3.5" />
+                  Restore role
+                </button>
+              )}
             </div>
           </>
         )}
@@ -317,9 +405,9 @@ export default function RoleDrawer() {
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="rounded-xl border border-zinc-200 bg-zinc-50/60 px-3 py-2">
-      <div className="text-[11px] text-zinc-500">{label}</div>
+      <div className="text-[0.6875rem] text-zinc-500">{label}</div>
       <div className="truncate text-sm font-medium capitalize text-zinc-900">{value}</div>
-      {hint && <div className="truncate text-[11px] text-zinc-400">{hint}</div>}
+      {hint && <div className="truncate text-[0.6875rem] text-zinc-400">{hint}</div>}
     </div>
   )
 }

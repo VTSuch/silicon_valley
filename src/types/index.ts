@@ -6,6 +6,7 @@ export type CandidateStatus =
   | 'calendly_sent'
   | 'calendly_booked'
   | 'to_be_submitted'
+  | 'needs_role'
   | 'standby'
   | 'submitted'
   | 'first_interview'
@@ -39,6 +40,12 @@ export interface Role {
   bounty?: number
   /** Fee percentage agreed for this role, e.g. 17.5. */
   bounty_pct?: number
+  /** URL of the role on Paraform / the sourcing platform. */
+  paraform_link?: string
+  /** URL of the full job description. */
+  job_description_link?: string
+  /** Set once archived: hidden from lists, but kept so candidates keep it. */
+  archived_at?: string | null
   created_at: string
 }
 
@@ -47,17 +54,20 @@ export interface Candidate {
   full_name: string
   email: string
   linkedin_url?: string
-  role_id: string
+  /** null while we are still looking for a role for this candidate. */
+  role_id: string | null
   status: CandidateStatus
   notes?: string
   /** Salary the candidate signed at. Overrides the role baseline bounty. */
   hired_salary?: number
+  /** Role search snooze: hidden from the search list until this date. */
+  next_search_at?: string | null
   created_at: string
-  role?: Role
+  role?: Role | null
 }
 
 export interface CandidateWithRole extends Candidate {
-  role: Role
+  role: Role | null
 }
 
 export interface StatusEvent {
