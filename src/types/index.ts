@@ -85,4 +85,13 @@ export interface FollowUp {
   created_at: string
 }
 
+export interface Note {
+  id: string
+  body: string
+  author?: string
+  /** Set when ticked off. Archived notes stay for the record. */
+  archived_at?: string | null
+  created_at: string
+}
+
 export type RoleWithCount = Role & { candidateCount: number }

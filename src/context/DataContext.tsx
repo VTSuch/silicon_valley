@@ -15,6 +15,7 @@ import {
   CandidateStatus,
   CandidateWithRole,
   FollowUp,
+  Note,
   Role,
   StatusEvent,
 } from '@/types'
@@ -40,6 +41,7 @@ interface DataContextValue {
   candidates: CandidateWithRole[]
   statusEvents: StatusEvent[]
   followUps: FollowUp[]
+  notes: Note[]
   followUpRules: FollowUpRules
   saveFollowUpRules: (rules: FollowUpRules) => Promise<void>
   loading: boolean
@@ -85,6 +87,11 @@ interface DataContextValue {
   /** Records that someone chased this candidate, so nobody chases twice. */
   logFollowUp: (candidateId: string, occurredAt: Date, note?: string) => Promise<void>
   deleteFollowUp: (id: string) => Promise<void>
+
+  createNote: (body: string) => Promise<void>
+  /** Ticking a note archives it; passing null brings it back. */
+  setNoteArchived: (id: string, archived: boolean) => Promise<void>
+  deleteNote: (id: string) => Promise<void>
 }
 
 const DataContext = createContext<DataContextValue | null>(null)
@@ -114,6 +121,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [candidates, setCandidates] = useState<CandidateWithRole[]>([])
   const [statusEvents, setStatusEvents] = useState<StatusEvent[]>([])
   const [followUps, setFollowUps] = useState<FollowUp[]>([])
+  const [notes, setNotes] = useState<Note[]>([])
   const [followUpRules, setFollowUpRules] = useState<FollowUpRules>({})
   const [loading, setLoading] = useState(true)
   const [signedIn, setSignedIn] = useState(false)
@@ -122,7 +130,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
-    const [rolesRes, candidatesRes, eventsRes, followUpsRes, settingsRes] = await Promise.all([
+    const [rolesRes, candidatesRes, eventsRes, followUpsRes, notesRes, settingsRes] =
+      await Promise.all([
       supabase.from('roles').select('*').order('created_at', { ascending: false }),
       supabase.from('candidates').select(CANDIDATE_SELECT).order('created_at', { ascending: false }),
       supabase
@@ -133,6 +142,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         .from('candidate_follow_ups')
         .select('*')
         .order('occurred_at', { ascending: true }),
+      supabase.from('notes').select('*').order('created_at', { ascending: false }),
       supabase.from('app_settings').select('value').eq('key', FOLLOW_UP_KEY).maybeSingle(),
     ])
 
@@ -156,6 +166,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setFollowUps([])
     } else {
       setFollowUps((followUpsRes.data as FollowUp[]) ?? [])
+    }
+
+    if (notesRes.error) {
+      // The notes table may not exist yet — the rest still works.
+      console.warn('Notes unavailable:', notesRes.error.message)
+      setNotes([])
+    } else {
+      setNotes((notesRes.data as Note[]) ?? [])
     }
 
     if (settingsRes.error) {
@@ -184,6 +202,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setCandidates([])
         setStatusEvents([])
         setFollowUps([])
+        setNotes([])
         setFollowUpRules({})
         setSignedIn(false)
         setLoading(false)
@@ -218,6 +237,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         { event: '*', schema: 'public', table: 'candidate_follow_ups' },
         () => refresh()
       )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notes' }, () => refresh())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () =>
         refresh()
       )
@@ -252,6 +272,34 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.from('candidate_follow_ups').delete().eq('id', id)
     if (error) throw error
     setFollowUps((prev) => prev.filter((f) => f.id !== id))
+  }, [])
+
+  const createNote = useCallback(async (body: string) => {
+    const { data: auth } = await supabase.auth.getUser()
+    const { data, error } = await supabase
+      .from('notes')
+      .insert({ body, author: displayName(auth.user) })
+      .select()
+      .single()
+    if (error) throw error
+    setNotes((prev) => [data as Note, ...prev])
+  }, [])
+
+  const setNoteArchived = useCallback(async (id: string, archived: boolean) => {
+    const { data, error } = await supabase
+      .from('notes')
+      .update({ archived_at: archived ? new Date().toISOString() : null })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw error
+    setNotes((prev) => prev.map((n) => (n.id === id ? (data as Note) : n)))
+  }, [])
+
+  const deleteNote = useCallback(async (id: string) => {
+    const { error } = await supabase.from('notes').delete().eq('id', id)
+    if (error) throw error
+    setNotes((prev) => prev.filter((n) => n.id !== id))
   }, [])
 
   const saveFollowUpRules = useCallback(async (rules: FollowUpRules) => {
@@ -411,6 +459,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       candidates,
       statusEvents,
       followUps,
+      notes,
       followUpRules,
       saveFollowUpRules,
       loading,
@@ -430,12 +479,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       deleteStatusEvent,
       logFollowUp,
       deleteFollowUp,
+      createNote,
+      setNoteArchived,
+      deleteNote,
     }),
     [
       roles,
       candidates,
       statusEvents,
       followUps,
+      notes,
       followUpRules,
       saveFollowUpRules,
       loading,
@@ -456,6 +509,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       deleteStatusEvent,
       logFollowUp,
       deleteFollowUp,
+      createNote,
+      setNoteArchived,
+      deleteNote,
     ]
   )
 

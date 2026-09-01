@@ -16,28 +16,23 @@ import {
 import { useJourneys, useRoles } from '@/hooks/useData'
 import { useData } from '@/context/DataContext'
 import { useUI } from '@/context/UIContext'
-import DateRangePills, { RangeSelection, defaultSelection } from '@/components/common/DateRangePills'
 import { StatusBadge, SourcePill } from '@/components/common/StatusBadge'
-import { inRange, relativeAgo, relativeDays } from '@/lib/dates'
+import { relativeAgo, relativeDays } from '@/lib/dates'
 import { pipelineOrder, statusMeta } from '@/lib/status'
 import FollowUpSettings from './FollowUpSettings'
 import RoleSearchCard from './RoleSearchCard'
+import NotesCard from './NotesCard'
 
 export default function Dashboard() {
   const journeys = useJourneys()
   const { rolesWithCount } = useRoles()
   const { openCandidate, openRole, setTab } = useUI()
   const { logFollowUp } = useData()
-  const [range, setRange] = useState<RangeSelection>(defaultSelection)
   const [rulesOpen, setRulesOpen] = useState(false)
 
-  /** The range filters the cohort by when the candidate entered the pipeline. */
-  const cohort = useMemo(() => {
-    if (!range.range.from && !range.range.to) return journeys
-    return journeys.filter((j) =>
-      inRange(j.submittedAt ?? new Date(j.candidate.created_at), range.range)
-    )
-  }, [journeys, range])
+  // The dashboard is the whole picture; the date filters live on the
+  // pipeline and metrics tabs.
+  const cohort = journeys
 
   const stats = useMemo(() => {
     const active = cohort.filter((j) => j.active)
@@ -100,7 +95,6 @@ export default function Dashboard() {
           <h1 className="text-2xl font-semibold text-zinc-900">Dashboard</h1>
           <p className="text-sm text-zinc-500">Everything that needs your attention today.</p>
         </div>
-        <DateRangePills value={range} onChange={setRange} />
       </div>
 
       {/* KPIs ---------------------------------------------------------------- */}
@@ -126,9 +120,10 @@ export default function Dashboard() {
         <Kpi label="Needs follow-up" value={alerts.length} icon={Bell} warn={alerts.length > 0} />
       </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+      {/* Follow-ups, the live pipeline and the scratchpad, side by side. */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 xl:grid-cols-[70fr_99fr_51fr]">
         {/* Follow-ups ------------------------------------------------------- */}
-        <section className="rounded-xl border border-zinc-200 bg-white xl:col-span-1">
+        <section className="rounded-xl border border-zinc-200 bg-white">
           <header className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
               <Bell className="h-4 w-4 text-amber-500" />
@@ -208,7 +203,7 @@ export default function Dashboard() {
         </section>
 
         {/* Active pipeline --------------------------------------------------- */}
-        <section className="rounded-xl border border-zinc-200 bg-white xl:col-span-2">
+        <section className="rounded-xl border border-zinc-200 bg-white">
           <header className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
             <h2 className="text-sm font-semibold text-zinc-900">
               Active candidates{' '}
@@ -250,7 +245,7 @@ export default function Dashboard() {
                 {activeList.length === 0 && (
                   <tr>
                     <td className="px-4 py-12 text-center text-sm text-zinc-400">
-                      No active candidates in this period.
+                      No active candidates.
                     </td>
                   </tr>
                 )}
@@ -258,13 +253,15 @@ export default function Dashboard() {
             </table>
           </div>
         </section>
+
+        <NotesCard />
       </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[70fr_150fr]">
         <RoleSearchCard journeys={journeys} />
 
         {/* Roles ------------------------------------------------------------ */}
-        <section className="rounded-xl border border-zinc-200 bg-white xl:col-span-2">
+        <section className="rounded-xl border border-zinc-200 bg-white">
           <header className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
             <h2 className="text-sm font-semibold text-zinc-900">Roles</h2>
             <button
