@@ -11,14 +11,6 @@ import { formatDate } from '@/lib/dates'
 import { RoleSource, WorkMode } from '@/types'
 import { roleBaselineBounty } from '@/lib/journey'
 
-const SECTIONS: { key: 'description' | 'requirements' | 'skills' | 'interview_process' | 'about_company'; label: string }[] = [
-  { key: 'description', label: 'Description' },
-  { key: 'requirements', label: 'Requirements' },
-  { key: 'skills', label: 'Skills' },
-  { key: 'interview_process', label: 'Interview process' },
-  { key: 'about_company', label: 'About the company' },
-]
-
 export default function RoleDrawer() {
   const { openRoleId, closeRole, openCandidate } = useUI()
   const { roles, candidates, updateRole, archiveRole, restoreRole, deleteRole } = useData()
@@ -47,10 +39,6 @@ export default function RoleDrawer() {
         paraform_link: role.paraform_link ?? '',
         job_description_link: role.job_description_link ?? '',
         description: role.description ?? '',
-        requirements: role.requirements ?? '',
-        skills: role.skills ?? '',
-        interview_process: role.interview_process ?? '',
-        about_company: role.about_company ?? '',
       })
     }
   }, [role?.id]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -83,10 +71,6 @@ export default function RoleDrawer() {
         paraform_link: form.paraform_link || undefined,
         job_description_link: form.job_description_link || undefined,
         description: form.description || undefined,
-        requirements: form.requirements || undefined,
-        skills: form.skills || undefined,
-        interview_process: form.interview_process || undefined,
-        about_company: form.about_company || undefined,
       })
       setEditing(false)
     } finally {
@@ -260,16 +244,17 @@ export default function RoleDrawer() {
                 onChange={(e) => setForm({ ...form, job_description_link: e.target.value })}
               />
             </Field>
-            {SECTIONS.map((s) => (
-              <Field key={s.key} label={s.label}>
-                <textarea
-                  rows={4}
-                  className={inputClass}
-                  value={form[s.key]}
-                  onChange={(e) => setForm({ ...form, [s.key]: e.target.value })}
-                />
-              </Field>
-            ))}
+            <Field
+              label="Description"
+              hint="The whole job post: brief, requirements, process, company."
+            >
+              <textarea
+                rows={10}
+                className={inputClass}
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+              />
+            </Field>
             <div className="flex gap-2">
               <PrimaryButton onClick={save} disabled={busy}>
                 {busy ? 'Saving…' : 'Save'}
@@ -357,14 +342,14 @@ export default function RoleDrawer() {
               )}
             </section>
 
-            {SECTIONS.filter((s) => role[s.key]).map((s) => (
-              <section key={s.key}>
-                <h3 className="mb-1.5 text-sm font-semibold text-zinc-900">{s.label}</h3>
+            {role.description && (
+              <section>
+                <h3 className="mb-1.5 text-sm font-semibold text-zinc-900">Description</h3>
                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-600">
-                  {role[s.key]}
+                  {role.description}
                 </p>
               </section>
-            ))}
+            )}
 
             <div className="flex items-center justify-between gap-3 border-t border-zinc-100 pt-4">
               <button

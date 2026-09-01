@@ -32,11 +32,8 @@ export interface Role {
   work_mode: WorkMode
   work_mode_details?: string
   experience?: string
+  /** The whole job post: brief, requirements, process, company — all of it. */
   description?: string
-  requirements?: string
-  interview_process?: string
-  about_company?: string
-  skills?: string
   bounty?: number
   /** Fee percentage agreed for this role, e.g. 17.5. */
   bounty_pct?: number

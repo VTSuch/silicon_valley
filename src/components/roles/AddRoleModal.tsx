@@ -22,19 +22,7 @@ const EMPTY = {
   paraform_link: '',
   job_description_link: '',
   description: '',
-  requirements: '',
-  skills: '',
-  interview_process: '',
-  about_company: '',
 }
-
-const LONG_FIELDS: { key: keyof typeof EMPTY; label: string }[] = [
-  { key: 'description', label: 'Description' },
-  { key: 'requirements', label: 'Requirements' },
-  { key: 'skills', label: 'Skills' },
-  { key: 'interview_process', label: 'Interview process' },
-  { key: 'about_company', label: 'About the company' },
-]
 
 export default function AddRoleModal({
   open,
@@ -49,7 +37,6 @@ export default function AddRoleModal({
   const [form, setForm] = useState(EMPTY)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [showDetails, setShowDetails] = useState(false)
 
   /**
    * The bounty follows the fee percentage applied to the bottom of the salary
@@ -85,14 +72,9 @@ export default function AddRoleModal({
         paraform_link: form.paraform_link || undefined,
         job_description_link: form.job_description_link || undefined,
         description: form.description || undefined,
-        requirements: form.requirements || undefined,
-        skills: form.skills || undefined,
-        interview_process: form.interview_process || undefined,
-        about_company: form.about_company || undefined,
       })
       onCreated?.(role)
       setForm(EMPTY)
-      setShowDetails(false)
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create the role')
@@ -226,35 +208,26 @@ export default function AddRoleModal({
           </Field>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowDetails((v) => !v)}
-          className="text-sm font-medium text-zinc-600 underline underline-offset-4 hover:text-zinc-900"
-        >
-          {showDetails ? 'Hide' : 'Add'} full job description
-        </button>
+        <Field label="Work mode details">
+          <input
+            className={inputClass}
+            placeholder="3 days a week in the office"
+            value={form.work_mode_details}
+            onChange={(e) => set('work_mode_details', e.target.value)}
+          />
+        </Field>
 
-        {showDetails && (
-          <div className="space-y-3">
-            <Field label="Work mode details">
-              <input
-                className={inputClass}
-                value={form.work_mode_details}
-                onChange={(e) => set('work_mode_details', e.target.value)}
-              />
-            </Field>
-            {LONG_FIELDS.map((f) => (
-              <Field key={f.key} label={f.label}>
-                <textarea
-                  rows={4}
-                  className={inputClass}
-                  value={form[f.key]}
-                  onChange={(e) => set(f.key, e.target.value)}
-                />
-              </Field>
-            ))}
-          </div>
-        )}
+        <Field
+          label="Description"
+          hint="The whole job post: brief, requirements, process, company."
+        >
+          <textarea
+            rows={10}
+            className={inputClass}
+            value={form.description}
+            onChange={(e) => set('description', e.target.value)}
+          />
+        </Field>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
