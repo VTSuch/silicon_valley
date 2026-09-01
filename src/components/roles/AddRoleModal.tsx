@@ -10,7 +10,7 @@ import { roleBaselineBounty } from '@/lib/journey'
 const EMPTY = {
   job_title: '',
   company: '',
-  source: '',
+  source: 'Paraform',
   location: '',
   experience: '',
   work_mode: 'remote',
