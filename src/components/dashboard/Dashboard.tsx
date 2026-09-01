@@ -156,8 +156,11 @@ export default function Dashboard() {
                   const limit = j.limit ?? 0
                   const chased = j.daysSinceFollowUp !== null
                   return (
-                    <li key={j.candidate.id} className={chased ? 'bg-zinc-50/60' : ''}>
-                      <div className="flex items-center gap-2 px-4 py-3">
+                    <li
+                      key={j.candidate.id}
+                      className={`px-4 py-3 ${chased ? 'bg-zinc-50/60' : ''}`}
+                    >
+                      <div className="flex items-center gap-2">
                         <button
                           onClick={() => openCandidate(j.candidate.id)}
                           className="min-w-0 flex-1 text-left"
@@ -166,7 +169,7 @@ export default function Dashboard() {
                             {j.candidate.full_name}
                           </span>
                           <span className="block truncate text-xs text-zinc-400">
-                            {j.candidate.role?.company} · {statusMeta(j.status).label}
+                            {j.candidate.role?.company}
                           </span>
                           {chased && (
                             <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[0.6875rem] font-medium text-emerald-700">
@@ -177,24 +180,26 @@ export default function Dashboard() {
                           )}
                         </button>
 
-                        <div className="flex shrink-0 flex-col items-end gap-1">
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                              chased ? 'bg-zinc-100 text-zinc-500' : 'bg-amber-50 text-amber-700'
-                            }`}
-                          >
-                            {relativeDays(j.daysInStatus)}
-                            <span className="opacity-60"> / {limit}d</span>
-                          </span>
-                          <button
-                            onClick={() => logFollowUp(j.candidate.id, new Date())}
-                            className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-1.5 py-0.5 text-[0.6875rem] font-medium text-zinc-600 transition hover:border-zinc-400 hover:text-zinc-900"
-                            title="Log that you chased this candidate today"
-                          >
-                            <BellRing className="h-3 w-3" />
-                            {chased ? 'Chased again' : 'Mark chased'}
-                          </button>
-                        </div>
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+                            chased ? 'bg-zinc-100 text-zinc-500' : 'bg-amber-50 text-amber-700'
+                          }`}
+                        >
+                          {relativeDays(j.daysInStatus)}
+                          <span className="opacity-60"> / {limit}d</span>
+                        </span>
+                      </div>
+
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <StatusBadge status={j.status} />
+                        <button
+                          onClick={() => logFollowUp(j.candidate.id, new Date())}
+                          className="inline-flex shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-1.5 py-0.5 text-[0.6875rem] font-medium text-zinc-600 transition hover:border-zinc-400 hover:text-zinc-900"
+                          title="Log that you chased this candidate today"
+                        >
+                          <BellRing className="h-3 w-3" />
+                          {chased ? 'Chased again' : 'Mark chased'}
+                        </button>
                       </div>
                     </li>
                   )
