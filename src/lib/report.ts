@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { CandidateWithRole, StatusEvent } from '@/types'
 import { buildJourneys } from '@/lib/journey'
-import { PIPELINE_STATUSES, normalizeStatus, statusMeta } from '@/lib/status'
+import { PIPELINE_STATUSES, statusMeta } from '@/lib/status'
 import { FOLLOW_UP_KEY, parseRules } from '@/lib/settings'
 
 /**
