@@ -13,7 +13,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core'
-import { AlertTriangle, Check, Search } from 'lucide-react'
+import { AlertTriangle, Check, PartyPopper, Search } from 'lucide-react'
 import { useData } from '@/context/DataContext'
 import { useJourneys } from '@/hooks/useData'
 import { useUI } from '@/context/UIContext'
@@ -25,6 +25,8 @@ import DateRangePills, {
   defaultSelection,
 } from '@/components/common/DateRangePills'
 import DateInput from '@/components/common/DateInput'
+import Modal from '@/components/common/Modal'
+import { PrimaryButton, GhostButton, inputClass } from '@/components/common/Field'
 
 export default function Pipeline() {
   const journeys = useJourneys()
@@ -34,6 +36,10 @@ export default function Pipeline() {
   const [query, setQuery] = useState('')
   const [moveDate, setMoveDate] = useState(() => toDateInput(new Date()))
   const [range, setRange] = useState<RangeSelection>(defaultSelection)
+  /** A hire waiting on the signed salary before it is recorded. */
+  const [hire, setHire] = useState<Journey | null>(null)
+  const [hireSalary, setHireSalary] = useState('')
+  const [savingHire, setSavingHire] = useState(false)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
@@ -77,7 +83,35 @@ export default function Pipeline() {
     // between mid steps happens in the candidate panel.
     if (column.statuses.includes(journey.status)) return
     const target = column.id === 'lost' ? rejectionFor(journey.status) : column.entry
+    // A hire is not official until we know what they signed at — ask first,
+    // then record the move and the salary together.
+    if (statusMeta(target).group === 'hired') {
+      setHireSalary(journey.candidate.hired_salary?.toString() ?? '')
+      setHire(journey)
+      return
+    }
     await setStatus(id, target, fromDateInput(moveDate))
+  }
+
+  const hireSalaryValue = Number(hireSalary)
+  const hireReady = hireSalary.trim() !== '' && hireSalaryValue > 0
+
+  const confirmHire = async () => {
+    if (!hire || !hireReady) return
+    setSavingHire(true)
+    try {
+      await setStatus(
+        hire.candidate.id,
+        'offer_accepted',
+        fromDateInput(moveDate),
+        undefined,
+        hireSalaryValue
+      )
+      setHire(null)
+      setHireSalary('')
+    } finally {
+      setSavingHire(false)
+    }
   }
 
   const onDragStart = (event: DragStartEvent) => {
@@ -150,6 +184,78 @@ export default function Pipeline() {
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      {/* Hire confirmation ------------------------------------------------ */}
+      <Modal
+        open={!!hire}
+        onClose={() => (savingHire ? undefined : setHire(null))}
+        title={
+          <span className="flex items-center gap-2">
+            <PartyPopper className="h-5 w-5 text-emerald-600" />
+            Congratulations!
+          </span>
+        }
+      >
+        {hire && (
+          <div className="space-y-4 p-5">
+            <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/60 p-4 text-center">
+              <p className="text-3xl">🎉</p>
+              <p className="mt-1 text-base font-semibold text-emerald-900">
+                {hire.candidate.full_name} is hired
+              </p>
+              {hire.candidate.role && (
+                <p className="text-sm text-emerald-800/80">
+                  {hire.candidate.role.job_title} · {hire.candidate.role.company}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-zinc-900">
+                What was the final salary?
+              </label>
+              <p className="mb-2 text-xs text-zinc-500">
+                {hire.candidate.role?.bounty_pct
+                  ? `The bounty becomes ${hire.candidate.role.bounty_pct}% of this salary.`
+                  : 'Set a fee % on the role to recalculate the bounty from this salary.'}
+              </p>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-400">
+                  $
+                </span>
+                <input
+                  type="number"
+                  autoFocus
+                  placeholder={hire.candidate.role?.salary_min?.toString() ?? 'Signed salary'}
+                  value={hireSalary}
+                  onChange={(e) => setHireSalary(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void confirmHire()
+                  }}
+                  className={`${inputClass} pl-7`}
+                />
+              </div>
+              {hireReady && hire.candidate.role?.bounty_pct && (
+                <p className="mt-2 text-sm text-zinc-600">
+                  Bounty ={' '}
+                  <span className="font-semibold text-emerald-700">
+                    ${Math.round((hireSalaryValue * hire.candidate.role.bounty_pct) / 100).toLocaleString()}
+                  </span>
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <GhostButton onClick={() => setHire(null)} disabled={savingHire}>
+                Cancel
+              </GhostButton>
+              <PrimaryButton onClick={confirmHire} disabled={!hireReady || savingHire}>
+                {savingHire ? 'Saving…' : 'Confirm hire'}
+              </PrimaryButton>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

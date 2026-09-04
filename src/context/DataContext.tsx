@@ -20,6 +20,14 @@ import {
   StatusEvent,
 } from '@/types'
 import { FOLLOW_UP_KEY, FollowUpRules, parseRules } from '@/lib/settings'
+import {
+  candidateSummary,
+  diffCandidate,
+  diffRole,
+  notify,
+  roleSummary,
+  statusLabel,
+} from '@/lib/notify'
 
 type CreateRoleInput = Omit<Role, 'id' | 'created_at'>
 type UpdateRoleInput = Partial<CreateRoleInput> & { archived_at?: string | null }
@@ -67,12 +75,17 @@ interface DataContextValue {
   ) => Promise<CandidateWithRole>
   updateCandidate: (id: string, updates: UpdateCandidateInput) => Promise<CandidateWithRole>
   deleteCandidate: (id: string) => Promise<void>
-  /** Moves a candidate to a new stage and records the date it happened. */
+  /**
+   * Moves a candidate to a new stage and records the date it happened.
+   * A hire also carries the signed salary, so the bounty is right from the
+   * moment the move lands — including in the notification it sends.
+   */
   setStatus: (
     id: string,
     status: CandidateStatus,
     occurredAt?: Date,
-    note?: string
+    note?: string,
+    hiredSalary?: number
   ) => Promise<void>
 
   addStatusEvent: (
@@ -125,9 +138,30 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [followUpRules, setFollowUpRules] = useState<FollowUpRules>({})
   const [loading, setLoading] = useState(true)
   const [signedIn, setSignedIn] = useState(false)
+  /**
+   * The latest rows, readable from the mutation callbacks. Telegram messages
+   * describe what changed, which means knowing what the row looked like
+   * before the write, without rebuilding every callback on each render.
+   */
+  const rolesRef = useRef<Role[]>([])
+  const candidatesRef = useRef<CandidateWithRole[]>([])
   /** Which user's data is already in memory, so focus events don't refetch. */
   const loadedForUser = useRef<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    rolesRef.current = roles
+  }, [roles])
+
+  useEffect(() => {
+    candidatesRef.current = candidates
+  }, [candidates])
+
+  const roleName = useCallback((id: unknown) => {
+    if (typeof id !== 'string') return null
+    const role = rolesRef.current.find((r) => r.id === id)
+    return role ? `${role.job_title} @ ${role.company}` : null
+  }, [])
 
   const refresh = useCallback(async () => {
     const [rolesRes, candidatesRes, eventsRes, followUpsRes, notesRes, settingsRes] =
@@ -264,6 +298,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         .single()
       if (error) throw error
       setFollowUps((prev) => [...prev, data as FollowUp])
+
+      const candidate = candidatesRef.current.find((c) => c.id === candidateId)
+      if (candidate) {
+        notify({
+          type: 'follow_up_logged',
+          candidate: candidateSummary(candidate, candidate.role),
+          note,
+          author,
+        })
+      }
     },
     []
   )
@@ -283,6 +327,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       .single()
     if (error) throw error
     setNotes((prev) => [data as Note, ...prev])
+    notify({ type: 'note_created', body, author: displayName(auth.user) })
   }, [])
 
   const setNoteArchived = useCallback(async (id: string, archived: boolean) => {
@@ -316,10 +361,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const { data, error } = await supabase.from('roles').insert(role).select().single()
     if (error) throw error
     setRoles((prev) => [data as Role, ...prev])
+    notify({ type: 'role_created', role: roleSummary(data as Role) })
     return data as Role
   }, [])
 
   const updateRole = useCallback(async (id: string, updates: UpdateRoleInput) => {
+    const before = rolesRef.current.find((r) => r.id === id)
     const { data, error } = await supabase
       .from('roles')
       .update(updates)
@@ -330,28 +377,37 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const role = data as Role
     setRoles((prev) => prev.map((r) => (r.id === id ? role : r)))
     setCandidates((prev) => prev.map((c) => (c.role_id === id ? { ...c, role } : c)))
+
+    // Archiving and restoring are announced by their own callers.
+    const changes = before ? diffRole(before, updates) : []
+    if (changes.length) notify({ type: 'role_updated', role: roleSummary(role), changes })
+
     return role
   }, [])
 
   const archiveRole = useCallback(
     async (id: string) => {
-      await updateRole(id, { archived_at: new Date().toISOString() })
+      const role = await updateRole(id, { archived_at: new Date().toISOString() })
+      notify({ type: 'role_archived', role: roleSummary(role) })
     },
     [updateRole]
   )
 
   const restoreRole = useCallback(
     async (id: string) => {
-      await updateRole(id, { archived_at: null })
+      const role = await updateRole(id, { archived_at: null })
+      notify({ type: 'role_restored', role: roleSummary(role) })
     },
     [updateRole]
   )
 
   /** Only ever used on a role nobody was submitted to. */
   const deleteRole = useCallback(async (id: string) => {
+    const before = rolesRef.current.find((r) => r.id === id)
     const { error } = await supabase.from('roles').delete().eq('id', id)
     if (error) throw error
     setRoles((prev) => prev.filter((r) => r.id !== id))
+    if (before) notify({ type: 'role_deleted', role: roleSummary(before) })
   }, [])
 
   // --- status history -------------------------------------------------------
@@ -412,39 +468,81 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {
         console.warn('Could not record initial status event', e)
       }
+      notify({ type: 'candidate_created', candidate: candidateSummary(created, created.role) })
       return created
     },
     [addStatusEvent]
   )
 
-  const updateCandidate = useCallback(async (id: string, updates: UpdateCandidateInput) => {
-    const { data, error } = await supabase
-      .from('candidates')
-      .update(updates)
-      .eq('id', id)
-      .select(CANDIDATE_SELECT)
-      .single()
-    if (error) throw error
-    const updated = data as CandidateWithRole
-    setCandidates((prev) => prev.map((c) => (c.id === id ? updated : c)))
-    return updated
-  }, [])
+  const updateCandidate = useCallback(
+    async (id: string, updates: UpdateCandidateInput) => {
+      const before = candidatesRef.current.find((c) => c.id === id)
+      const { data, error } = await supabase
+        .from('candidates')
+        .update(updates)
+        .eq('id', id)
+        .select(CANDIDATE_SELECT)
+        .single()
+      if (error) throw error
+      const updated = data as CandidateWithRole
+      setCandidates((prev) => prev.map((c) => (c.id === id ? updated : c)))
+
+      // A write that carries a status is a stage move, and setStatus
+      // announces those itself — with the stage they came from.
+      const changes =
+        before && updates.status === undefined ? diffCandidate(before, updates, roleName) : []
+      if (changes.length) {
+        notify({
+          type: 'candidate_updated',
+          candidate: candidateSummary(updated, updated.role),
+          changes,
+        })
+      }
+
+      return updated
+    },
+    [roleName]
+  )
 
   const deleteCandidate = useCallback(async (id: string) => {
+    const before = candidatesRef.current.find((c) => c.id === id)
     const { error } = await supabase.from('candidates').delete().eq('id', id)
     if (error) throw error
     setCandidates((prev) => prev.filter((c) => c.id !== id))
     setStatusEvents((prev) => prev.filter((e) => e.candidate_id !== id))
     setFollowUps((prev) => prev.filter((f) => f.candidate_id !== id))
+    if (before) {
+      notify({ type: 'candidate_deleted', candidate: candidateSummary(before, before.role) })
+    }
   }, [])
 
   const setStatus = useCallback(
-    async (id: string, status: CandidateStatus, occurredAt?: Date, note?: string) => {
-      await updateCandidate(id, { status })
+    async (
+      id: string,
+      status: CandidateStatus,
+      occurredAt?: Date,
+      note?: string,
+      hiredSalary?: number
+    ) => {
+      const before = candidatesRef.current.find((c) => c.id === id)
+      const updated = await updateCandidate(id, {
+        status,
+        ...(hiredSalary === undefined ? {} : { hired_salary: hiredSalary }),
+      })
       try {
         await addStatusEvent(id, status, occurredAt ?? new Date(), note)
       } catch (e) {
         console.warn('Could not record status event', e)
+      }
+      if (before?.status !== status) {
+        notify({
+          type: 'candidate_status_changed',
+          candidate: candidateSummary(updated, updated.role),
+          from: statusLabel(before?.status),
+          to: statusLabel(status) ?? status,
+          toId: status,
+          note,
+        })
       }
     },
     [addStatusEvent, updateCandidate]

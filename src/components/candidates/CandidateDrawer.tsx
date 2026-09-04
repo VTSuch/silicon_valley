@@ -73,6 +73,8 @@ export default function CandidateDrawer() {
   const [changeDate, setChangeDate] = useState(() => toDateInput(new Date()))
   const [selected, setSelected] = useState<CandidateStatus>('submitted')
   const [hiredSalary, setHiredSalary] = useState('')
+  /** Signed salary asked for as part of the move to Hired. */
+  const [stageSalary, setStageSalary] = useState('')
   const [followUpNote, setFollowUpNote] = useState('')
   const [followUpDate, setFollowUpDate] = useState(() => toDateInput(new Date()))
   const [form, setForm] = useState({
@@ -97,6 +99,7 @@ export default function CandidateDrawer() {
         notes: candidate.notes ?? '',
       })
       setHiredSalary(candidate.hired_salary?.toString() ?? '')
+      setStageSalary(candidate.hired_salary?.toString() ?? '')
       setFollowUpNote('')
       setFollowUpDate(toDateInput(new Date()))
     }
@@ -108,10 +111,24 @@ export default function CandidateDrawer() {
   const snoozedUntil = candidate.next_search_at ? new Date(candidate.next_search_at) : null
   const snoozed = !!snoozedUntil && snoozedUntil > new Date()
 
+  // A hire is only real once we know what they signed at: the bounty, the
+  // metrics and the notification all hang off it.
+  const hiring = statusMeta(selected).group === 'hired'
+  const stageSalaryValue = Number(stageSalary)
+  const stageReady = !hiring || (stageSalary.trim() !== '' && stageSalaryValue > 0)
+
   const addStage = async () => {
+    if (!stageReady) return
     setBusy('stage')
     try {
-      await setStatus(candidate.id, selected, fromDateInput(changeDate))
+      await setStatus(
+        candidate.id,
+        selected,
+        fromDateInput(changeDate),
+        undefined,
+        hiring ? stageSalaryValue : undefined
+      )
+      if (hiring) setHiredSalary(stageSalary)
     } finally {
       setBusy(null)
     }
@@ -460,6 +477,40 @@ export default function CandidateDrawer() {
                 })}
               </div>
 
+              {hiring && (
+                <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+                  <label className="text-xs font-semibold text-emerald-900">
+                    Hired at — required
+                  </label>
+                  <p className="mb-2 text-[0.6875rem] text-emerald-800/70">
+                    {candidate.role?.bounty_pct
+                      ? `The bounty becomes ${candidate.role.bounty_pct}% of this salary.`
+                      : 'Set a fee % on the role to recalculate the bounty from this salary.'}
+                  </p>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-400">
+                      $
+                    </span>
+                    <input
+                      type="number"
+                      autoFocus
+                      placeholder={candidate.role?.salary_min?.toString() ?? 'Signed salary'}
+                      value={stageSalary}
+                      onChange={(e) => setStageSalary(e.target.value)}
+                      className={`${inputClass} pl-7`}
+                    />
+                  </div>
+                  {stageReady && candidate.role?.bounty_pct && (
+                    <p className="mt-2 text-xs text-emerald-900">
+                      Bounty ={' '}
+                      <span className="font-semibold">
+                        ${Math.round((stageSalaryValue * candidate.role.bounty_pct) / 100).toLocaleString()}
+                      </span>
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-zinc-100 pt-3">
                 <label className="mr-auto flex items-center gap-2 text-xs text-zinc-500">
                   Date
@@ -470,7 +521,11 @@ export default function CandidateDrawer() {
                     className="rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-900 outline-none focus:border-zinc-400"
                   />
                 </label>
-                <PrimaryButton onClick={addStage} disabled={busy !== null} className="py-1.5 text-xs">
+                <PrimaryButton
+                  onClick={addStage}
+                  disabled={busy !== null || !stageReady}
+                  className="py-1.5 text-xs"
+                >
                   {busy === 'stage' ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (
@@ -480,8 +535,9 @@ export default function CandidateDrawer() {
                 </PrimaryButton>
               </div>
               <p className="mt-1.5 text-right text-[0.6875rem] text-zinc-400">
-                Adds {statusMeta(selected).label} on the date above — even if it is already the
-                current stage.
+                {hiring && !stageReady
+                  ? 'Enter the signed salary to record the hire.'
+                  : `Adds ${statusMeta(selected).label} on the date above — even if it is already the current stage.`}
               </p>
             </div>
           )}
