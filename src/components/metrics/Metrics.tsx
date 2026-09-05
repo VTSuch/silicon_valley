@@ -6,8 +6,9 @@ import { useUI } from '@/context/UIContext'
 import DateRangePills, { RangeSelection } from '@/components/common/DateRangePills'
 import StageBars, { MonthBucket, StageLegend } from './StageBars'
 import PipelineValueChart, { ValuePoint } from './PipelineValueChart'
+import EarnedValueChart, { EarnedPoint } from './EarnedValueChart'
 import { METRIC_GROUPS, StageGroup } from '@/lib/status'
-import { earnedValueAt, inPlayAt } from '@/lib/journey'
+import { inPlaySplitAt } from '@/lib/journey'
 import {
   daySeries,
   endOfDay,
@@ -108,20 +109,58 @@ export default function Metrics() {
     const to = range.range.to ?? new Date()
     return daySeries(from, to).map((date) => {
       const at = endOfDay(date)
-      const live = inPlayAt(journeys, at)
+      // El reparto se recalcula día a día contra el historial de estados: el
+      // día que alguien pasa de entregado a primera ronda, su bounty cambia de
+      // banda sin que el total se mueva.
+      const { advanced, submitted } = inPlaySplitAt(journeys, at)
+      const suma = (list: typeof advanced) => list.reduce((sum, j) => sum + j.bounty, 0)
       return {
         date,
-        inPlay: live.reduce((sum, j) => sum + j.bounty, 0),
-        earned: earnedValueAt(journeys, at),
-        contributors: live
-          .slice()
-          .sort((a, b) => b.bounty - a.bounty)
-          .map((j) => ({
+        advanced: suma(advanced),
+        waiting: suma(submitted),
+        contributors: [
+          ...advanced.map((j) => ({ j, waiting: false })),
+          ...submitted.map((j) => ({ j, waiting: true })),
+        ]
+          .sort((a, b) => b.j.bounty - a.j.bounty)
+          .map(({ j, waiting }) => ({
             id: j.candidate.id,
             name: j.candidate.full_name.trim(),
             company: j.candidate.role?.company ?? '—',
             bounty: j.bounty,
+            waiting,
           })),
+      }
+    })
+  }, [journeys, range])
+
+  /**
+   * Lo cobrado, acumulado. Va aparte de `valuePoints` porque ahora son dos
+   * gráficas: comparten fechas pero no eje, y mezclarlas aplastaba la pequeña.
+   */
+  const earnedPoints = useMemo<EarnedPoint[]>(() => {
+    const hires = journeys
+      .filter((j) => j.status === 'offer_accepted')
+      .map((j) => ({
+        id: j.candidate.id,
+        name: j.candidate.full_name.trim(),
+        company: j.candidate.role?.company ?? '—',
+        bounty: j.bounty,
+        closedAt: j.exitAt ?? j.since,
+      }))
+    if (hires.length === 0) return []
+    const from =
+      range.range.from ?? new Date(Math.min(...hires.map((h) => h.closedAt.getTime())))
+    const to = range.range.to ?? new Date()
+    return daySeries(from, to).map((date) => {
+      const at = endOfDay(date)
+      const cerradas = hires
+        .filter((h) => h.closedAt <= at)
+        .sort((a, b) => b.closedAt.getTime() - a.closedAt.getTime())
+      return {
+        date,
+        earned: cerradas.reduce((sum, h) => sum + h.bounty, 0),
+        hires: cerradas,
       }
     })
   }, [journeys, range])
@@ -219,9 +258,17 @@ export default function Metrics() {
         <section className="rounded-xl border border-zinc-200 bg-white p-5 lg:col-span-2">
           <h2 className="text-sm font-semibold text-zinc-900">Pipeline value over time</h2>
           <p className="mb-4 text-xs text-zinc-500">
-            Bounty rises when a candidate is submitted and drops when they are rejected or hired.
+            Solid band: past first stage. Dashed band on top: submitted and still waiting.
           </p>
           <PipelineValueChart points={valuePoints} onSelectCandidate={openCandidate} />
+        </section>
+
+        <section className="rounded-xl border border-zinc-200 bg-white p-5 lg:col-span-2">
+          <h2 className="text-sm font-semibold text-zinc-900">Earned from hires</h2>
+          <p className="mb-4 text-xs text-zinc-500">
+            Cumulative bounty from candidates who signed. Only goes up.
+          </p>
+          <EarnedValueChart points={earnedPoints} onSelectCandidate={openCandidate} />
         </section>
       </div>
     </div>

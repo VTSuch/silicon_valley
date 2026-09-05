@@ -8,13 +8,17 @@ export interface Contributor {
   name: string
   company: string
   bounty: number
+  /** Still waiting on the client's first answer on that date. */
+  waiting: boolean
 }
 
 export interface ValuePoint {
   date: Date
-  inPlay: number
-  earned: number
-  /** Who makes up `inPlay` on that date, biggest bounty first. */
+  /** Bounty past the client's screen: first stage onwards. */
+  advanced: number
+  /** Bounty submitted and still waiting for an answer. Stacks on `advanced`. */
+  waiting: number
+  /** Who makes up the two bands on that date, biggest bounty first. */
   contributors: Contributor[]
 }
 
@@ -22,9 +26,20 @@ const W = 800
 const H = 220
 const PAD = { top: 12, right: 8, bottom: 24, left: 52 }
 
+/* Azul del badge de «Submitted»: la banda de arriba y su etiqueta son la
+   misma cosa vista en dos sitios, y conviene que se reconozca. */
+const AZUL = '#2563eb'
+
 /**
  * Bounty at risk over time: it rises when a candidate is submitted and drops
- * when they are rejected or hired. The second line is cumulative earned.
+ * when they are rejected or hired. Lo ya cobrado vive en su propia gráfica.
+ *
+ * Van dos bandas apiladas, no una. Abajo lo que ya pasó la criba del cliente;
+ * encima, sumado, lo que sigue esperando respuesta. Una sola curva daba el
+ * mismo peso a un CV recién mandado que a alguien en ronda final, y escondía
+ * el día en que uno pasa de lo segundo a lo primero: el total no se mueve,
+ * pero la frontera entre bandas sube. La discontinua de arriba avisa de que
+ * esa parte todavía puede caerse entera.
  */
 export default function PipelineValueChart({
   points,
@@ -35,23 +50,45 @@ export default function PipelineValueChart({
 }) {
   const [hover, setHover] = useState<number | null>(null)
 
-  const { inPlayPath, areaPath, earnedPath, max, x, y } = useMemo(() => {
-    const max = Math.max(1, ...points.map((p) => Math.max(p.inPlay, p.earned)))
-    const innerW = W - PAD.left - PAD.right
-    const innerH = H - PAD.top - PAD.bottom
-    const x = (i: number) => PAD.left + (points.length <= 1 ? 0 : (i / (points.length - 1)) * innerW)
-    const y = (v: number) => PAD.top + innerH - (v / max) * innerH
+  const { advancedPath, advancedArea, totalPath, waitingBand, max, x, y, total } =
+    useMemo(() => {
+      const total = (p: ValuePoint) => p.advanced + p.waiting
+      const max = Math.max(1, ...points.map(total))
+      const innerW = W - PAD.left - PAD.right
+      const innerH = H - PAD.top - PAD.bottom
+      const x = (i: number) =>
+        PAD.left + (points.length <= 1 ? 0 : (i / (points.length - 1)) * innerW)
+      const y = (v: number) => PAD.top + innerH - (v / max) * innerH
 
-    const line = (key: 'inPlay' | 'earned') =>
-      points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(p[key]).toFixed(1)}`).join(' ')
+      const line = (value: (p: ValuePoint) => number) =>
+        points
+          .map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(value(p)).toFixed(1)}`)
+          .join(' ')
 
-    const inPlayPath = line('inPlay')
-    const areaPath = points.length
-      ? `${inPlayPath} L${x(points.length - 1).toFixed(1)},${y(0).toFixed(1)} L${x(0).toFixed(1)},${y(0).toFixed(1)} Z`
-      : ''
+      const advancedPath = line((p) => p.advanced)
+      const totalPath = line(total)
+      const advancedArea = points.length
+        ? `${advancedPath} L${x(points.length - 1).toFixed(1)},${y(0).toFixed(1)} L${x(0).toFixed(1)},${y(0).toFixed(1)} Z`
+        : ''
+      // La banda de espera se cierra volviendo por encima de la de abajo, así
+      // que solo pinta la diferencia entre las dos y no tapa a la primera.
+      const vuelta = points
+        .map((p, i) => `L${x(i).toFixed(1)},${y(p.advanced).toFixed(1)}`)
+        .reverse()
+        .join(' ')
+      const waitingBand = points.length ? `${totalPath} ${vuelta} Z` : ''
 
-    return { inPlayPath, areaPath, earnedPath: line('earned'), max, x, y }
-  }, [points])
+      return {
+        advancedPath,
+        advancedArea,
+        totalPath,
+        waitingBand,
+        max,
+        x,
+        y,
+        total,
+      }
+    }, [points])
 
   if (points.length === 0) {
     return <p className="py-16 text-center text-sm text-zinc-400">Not enough history yet.</p>
@@ -96,14 +133,21 @@ export default function PipelineValueChart({
           </g>
         ))}
 
-        <path d={areaPath} fill="#18181b" opacity={0.06} />
-        <path d={inPlayPath} fill="none" stroke="#18181b" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+        <path d={advancedArea} fill="#18181b" opacity={0.06} />
+        <path d={waitingBand} fill={AZUL} opacity={0.12} />
         <path
-          d={earnedPath}
+          d={advancedPath}
           fill="none"
-          stroke="#10b981"
+          stroke="#18181b"
           strokeWidth={2}
-          strokeDasharray="4 3"
+          vectorEffect="non-scaling-stroke"
+        />
+        <path
+          d={totalPath}
+          fill="none"
+          stroke={AZUL}
+          strokeWidth={1.5}
+          strokeDasharray="5 3"
           vectorEffect="non-scaling-stroke"
         />
 
@@ -117,8 +161,10 @@ export default function PipelineValueChart({
               stroke="#a1a1aa"
               strokeWidth={1}
             />
-            <circle cx={x(hover)} cy={y(points[hover].inPlay)} r={3.5} fill="#18181b" />
-            <circle cx={x(hover)} cy={y(points[hover].earned)} r={3.5} fill="#10b981" />
+            <circle cx={x(hover)} cy={y(points[hover].advanced)} r={3.5} fill="#18181b" />
+            {points[hover].waiting > 0 && (
+              <circle cx={x(hover)} cy={y(total(points[hover]))} r={3.5} fill={AZUL} />
+            )}
           </g>
         )}
 
@@ -144,11 +190,11 @@ export default function PipelineValueChart({
       <div className="mt-1 flex flex-wrap items-center gap-4 text-xs text-zinc-600">
         <span className="inline-flex items-center gap-1.5">
           <span className="h-0.5 w-4 bg-zinc-900" />
-          Bounty in play
+          Past first stage
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-0.5 w-4 border-t-2 border-dashed border-emerald-500" />
-          Earned (hires)
+          <span className="h-0.5 w-4 border-t-2 border-dashed" style={{ borderColor: AZUL }} />
+          Submitted, waiting
         </span>
       </div>
 
@@ -159,7 +205,12 @@ export default function PipelineValueChart({
               {formatShortDate(active.date)}
             </span>
             <span className="text-sm font-semibold tabular-nums text-zinc-900">
-              {money(active.inPlay)}
+              {money(active.advanced)}
+              {active.waiting > 0 && (
+                <span className="ml-1 text-xs" style={{ color: AZUL }}>
+                  (+{money(active.waiting)})
+                </span>
+              )}
             </span>
           </div>
           <div className="mt-0.5 flex items-baseline justify-between gap-2 text-[0.6875rem] text-zinc-500">
@@ -167,7 +218,6 @@ export default function PipelineValueChart({
               {active.contributors.length} candidate
               {active.contributors.length === 1 ? '' : 's'} in play
             </span>
-            <span className="text-emerald-600">{money(active.earned)} earned</span>
           </div>
 
           {active.contributors.length > 0 && (
@@ -186,7 +236,10 @@ export default function PipelineValueChart({
                       {c.name}{' '}
                       <span className="text-zinc-400">({c.company})</span>
                     </span>
-                    <span className="shrink-0 font-medium tabular-nums text-zinc-900">
+                    <span
+                      className="shrink-0 font-medium tabular-nums"
+                      style={{ color: c.waiting ? AZUL : '#18181b' }}
+                    >
                       {money(c.bounty)}
                     </span>
                   </button>

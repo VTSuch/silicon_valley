@@ -156,6 +156,65 @@ export function inPlayAt(journeys: Journey[], at: Date) {
   })
 }
 
+/**
+ * The rank from which a candidate counts as "past submitted": first stage
+ * onwards. A CV sitting on a client's desk and a candidate who has already
+ * interviewed are not worth the same, and the pipeline number should not
+ * pretend otherwise.
+ */
+export const ADVANCED_RANK = 2
+
+/**
+ * What status this candidate had at a given instant, reconstructed from the
+ * event log. Needed to split the value curve historically: the same bounty
+ * belongs to the submitted band one week and to the advanced band the next,
+ * and reading today's status would backdate that jump to the beginning.
+ */
+export function statusAt(j: Journey, at: Date): CandidateStatus | null {
+  let found: CandidateStatus | null = null
+  for (const e of j.events) {
+    if (asDate(e.occurred_at) > at) break
+    found = normalizeStatus(e.status)
+  }
+  if (found) return found
+  if (!j.submittedAt || j.submittedAt > at) return null
+  // Sin eventos anteriores a esa fecha hay dos casos. Si el historial está
+  // vacío del todo, lo único que se sabe del candidato es su estado de hoy.
+  // Si tiene eventos pero todos posteriores, entró en juego al entregarlo y
+  // por definición estaba en «submitted» hasta el primero de ellos.
+  return j.events.length === 0 ? j.status : 'submitted'
+}
+
+const isAdvanced = (status: CandidateStatus | null) =>
+  status !== null && statusMeta(status).rank >= ADVANCED_RANK
+
+/**
+ * El valor en juego partido en dos: lo que ya ha pasado de la criba del
+ * cliente y lo que sigue esperando respuesta.
+ *
+ * Todo lo que está en juego y no ha llegado a primera ronda cae en
+ * `submitted`, no solo el estado con ese nombre — así las dos cifras siempre
+ * suman el total y ningún candidato se pierde por el camino.
+ */
+export function inPlaySplitAt(journeys: Journey[], at: Date) {
+  const advanced: Journey[] = []
+  const submitted: Journey[] = []
+  for (const j of inPlayAt(journeys, at)) {
+    ;(isAdvanced(statusAt(j, at)) ? advanced : submitted).push(j)
+  }
+  return { advanced, submitted }
+}
+
+/** Lo mismo pero sobre el estado actual, para los marcadores del dashboard. */
+export function splitLive(journeys: Journey[]) {
+  const advanced: Journey[] = []
+  const submitted: Journey[] = []
+  for (const j of journeys.filter((j) => j.active && j.submittedAt)) {
+    ;(isAdvanced(j.status) ? advanced : submitted).push(j)
+  }
+  return { advanced, submitted }
+}
+
 /** Bounty in play at a given instant. */
 export function pipelineValueAt(journeys: Journey[], at: Date) {
   return inPlayAt(journeys, at).reduce((sum, j) => sum + j.bounty, 0)

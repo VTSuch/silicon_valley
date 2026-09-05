@@ -19,6 +19,7 @@ import { useUI } from '@/context/UIContext'
 import { StatusBadge, SourcePill } from '@/components/common/StatusBadge'
 import { relativeAgo, relativeDays } from '@/lib/dates'
 import { pipelineOrder, statusMeta } from '@/lib/status'
+import { splitLive } from '@/lib/journey'
 import FollowUpSettings from './FollowUpSettings'
 import RoleSearchCard from './RoleSearchCard'
 import NotesCard from './NotesCard'
@@ -42,7 +43,10 @@ export default function Dashboard() {
     )
     const offers = cohort.filter((j) => statusMeta(j.status).group === 'offer')
     const hires = cohort.filter((j) => j.status === 'offer_accepted')
-    const live = journeys.filter((j) => j.active && j.submittedAt)
+    // El pipeline vivo, partido: lo que ya ha pasado la criba del cliente y
+    // lo que todavía espera respuesta. No valen lo mismo, y sumarlos en una
+    // sola cifra inflaba justo el número que se mira primero.
+    const { advanced, submitted: waiting } = splitLive(journeys)
 
     return {
       active: active.length,
@@ -51,8 +55,9 @@ export default function Dashboard() {
       offers: offers.length,
       hires: hires.length,
       hireValue: hires.reduce((s, j) => s + j.bounty, 0),
-      liveValue: live.reduce((s, j) => s + j.bounty, 0),
-      liveCount: live.length,
+      liveValue: advanced.reduce((s, j) => s + j.bounty, 0),
+      liveWaitingValue: waiting.reduce((s, j) => s + j.bounty, 0),
+      liveCount: advanced.length + waiting.length,
     }
   }, [cohort, journeys])
 
@@ -99,7 +104,22 @@ export default function Dashboard() {
 
       {/* KPIs ---------------------------------------------------------------- */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-        <Kpi label="Live pipeline" value={`$${stats.liveValue.toLocaleString()}`} sub={`${stats.liveCount} candidates in play`} icon={CircleDollarSign} highlight />
+        <Kpi
+          label="Live pipeline"
+          value={
+            <>
+              <span className="text-emerald-600">${stats.liveValue.toLocaleString()}</span>
+              {stats.liveWaitingValue > 0 && (
+                <span className="ml-1.5 text-base font-semibold text-zinc-900">
+                  (+${stats.liveWaitingValue.toLocaleString()})
+                </span>
+              )}
+            </>
+          }
+          sub={`${stats.liveCount} candidates in play`}
+          icon={CircleDollarSign}
+          highlight
+        />
         <Kpi label="Submitted" value={stats.submitted} icon={Send} />
         <Kpi label="Interviewing" value={stats.interviewing} icon={Users} />
         <Kpi label="Offers out" value={stats.offers} icon={Handshake} />
