@@ -37,6 +37,7 @@ type CandidateFields = Pick<
   | 'full_name'
   | 'email'
   | 'role_id'
+  | 'target_role'
   | 'status'
   | 'linkedin_url'
   | 'notes'

@@ -11,6 +11,8 @@ export interface AddCandidatePrefill {
   linkedin_url?: string
   notes?: string
   role_id?: string
+  /** The brief for a candidate who still needs a role found for them. */
+  target_role?: string
   /** The role-search candidate this came from, if any. */
   sourceCandidateId?: string
 }

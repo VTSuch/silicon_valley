@@ -82,6 +82,7 @@ export default function CandidateDrawer() {
     email: '',
     linkedin_url: '',
     role_id: '',
+    target_role: '',
     notes: '',
   })
 
@@ -96,6 +97,7 @@ export default function CandidateDrawer() {
         email: candidate.email,
         linkedin_url: candidate.linkedin_url ?? '',
         role_id: candidate.role_id ?? '',
+        target_role: candidate.target_role ?? '',
         notes: candidate.notes ?? '',
       })
       setHiredSalary(candidate.hired_salary?.toString() ?? '')
@@ -174,6 +176,8 @@ export default function CandidateDrawer() {
         email: form.email,
         linkedin_url: form.linkedin_url || undefined,
         role_id: form.role_id || null,
+        // The brief only applies while they are still without a role.
+        target_role: form.role_id ? undefined : form.target_role || undefined,
         notes: form.notes || undefined,
       })
       setEditing(false)
@@ -614,6 +618,16 @@ export default function CandidateDrawer() {
                   allowNone
                 />
               </Field>
+              {!form.role_id && (
+                <Field label="Role they are looking for">
+                  <input
+                    className={inputClass}
+                    placeholder="e.g. Head of B2B Marketing"
+                    value={form.target_role}
+                    onChange={(e) => setForm({ ...form, target_role: e.target.value })}
+                  />
+                </Field>
+              )}
               <Field label="Notes">
                 <textarea
                   rows={3}
@@ -649,6 +663,9 @@ export default function CandidateDrawer() {
                   )
                 }
               />
+              {isRoleSearch && (
+                <Row label="Looking for" value={candidate.target_role || '—'} />
+              )}
               <Row label="Added" value={formatDate(candidate.created_at)} />
               <Row label="Submitted" value={formatDate(journey.submittedAt)} />
               {candidate.notes && <Row label="Notes" value={candidate.notes} />}

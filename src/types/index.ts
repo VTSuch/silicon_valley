@@ -53,6 +53,8 @@ export interface Candidate {
   linkedin_url?: string
   /** null while we are still looking for a role for this candidate. */
   role_id: string | null
+  /** What we are looking for on their behalf, while they have no role. */
+  target_role?: string
   status: CandidateStatus
   notes?: string
   /** Salary the candidate signed at. Overrides the role baseline bounty. */

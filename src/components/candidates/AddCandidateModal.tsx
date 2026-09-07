@@ -17,6 +17,7 @@ const EMPTY = {
   email: '',
   linkedin_url: '',
   role_id: '',
+  target_role: '',
   notes: '',
   status: 'submitted' as CandidateStatus,
 }
@@ -50,6 +51,7 @@ export default function AddCandidateModal({
       linkedin_url: addCandidatePrefill?.linkedin_url ?? '',
       notes: addCandidatePrefill?.notes ?? '',
       role_id: addCandidatePrefill?.role_id ?? '',
+      target_role: addCandidatePrefill?.target_role ?? '',
     })
     setDate(toDateInput(new Date()))
     setKeepSearching(true)
@@ -79,6 +81,8 @@ export default function AddCandidateModal({
             email: form.email || 'n/a',
             linkedin_url: form.linkedin_url || undefined,
             role_id: form.role_id || null,
+            // Only meaningful while they have no role: it is the brief.
+            target_role: form.role_id ? undefined : form.target_role || undefined,
             notes: form.notes || undefined,
             status,
           },
@@ -145,6 +149,20 @@ export default function AddCandidateModal({
               allowNone
             />
           </Field>
+
+          {!form.role_id && (
+            <Field
+              label="Role they are looking for"
+              hint="What to search for on their behalf — shown in the role search list."
+            >
+              <input
+                className={inputClass}
+                placeholder="e.g. Head of B2B Marketing"
+                value={form.target_role}
+                onChange={(e) => setForm({ ...form, target_role: e.target.value })}
+              />
+            </Field>
+          )}
 
           {source && form.role_id && (
             <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-fuchsia-200 bg-fuchsia-50/50 p-3">

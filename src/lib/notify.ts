@@ -71,6 +71,7 @@ const CANDIDATE_LABELS: Record<string, string> = {
   notes: 'Notes',
   hired_salary: 'Hired salary',
   role_id: 'Role',
+  target_role: 'Looking for',
   // next_search_at is deliberately absent: snoozing a role search already
   // logs a follow-up, and announcing the reminder date as well means two
   // notifications for one action.

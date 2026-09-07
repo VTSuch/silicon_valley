@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { CalendarClock, RotateCcw, Search, UserSearch } from 'lucide-react'
+import { CalendarClock, RotateCcw, Search, Target, UserSearch } from 'lucide-react'
 import { useData } from '@/context/DataContext'
 import { useUI } from '@/context/UIContext'
 import { Journey } from '@/lib/journey'
@@ -105,24 +105,33 @@ export default function RoleSearchCard({ journeys }: { journeys: Journey[] }) {
                     onClick={() => openCandidate(j.candidate.id)}
                     className="min-w-0 flex-1 text-left"
                   >
-                    <span className="block truncate text-sm font-medium text-zinc-900">
-                      {j.candidate.full_name}
+                    <span className="flex items-baseline gap-1.5">
+                      <span className="truncate text-sm font-medium text-zinc-900">
+                        {j.candidate.full_name}
+                      </span>
+                      <span className="shrink-0 text-xs text-zinc-400">
+                        ({relativeDays(j.daysInStatus)})
+                      </span>
+                      {!showSnoozed && j.stale && (
+                        <span className="shrink-0 rounded-full bg-amber-50 px-1.5 py-0.5 text-[0.6875rem] font-medium text-amber-700">
+                          search due
+                        </span>
+                      )}
                     </span>
-                    <span className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-zinc-400">
+                    {/* What we are hunting for takes the line under the name. */}
+                    <span className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-zinc-500">
                       {showSnoozed ? (
                         <>
-                          <CalendarClock className="h-3 w-3" />
+                          <CalendarClock className="h-3 w-3 shrink-0 text-zinc-400" />
                           From {formatDate(j.candidate.next_search_at)}
                         </>
-                      ) : (
+                      ) : j.candidate.target_role ? (
                         <>
-                          Waiting {relativeDays(j.daysInStatus)}
-                          {j.stale && (
-                            <span className="rounded-full bg-amber-50 px-1.5 py-0.5 font-medium text-amber-700">
-                              search due
-                            </span>
-                          )}
+                          <Target className="h-3 w-3 shrink-0 text-fuchsia-500" />
+                          <span className="truncate">{j.candidate.target_role}</span>
                         </>
+                      ) : (
+                        <span className="text-zinc-400">No brief yet</span>
                       )}
                     </span>
                   </button>
@@ -134,6 +143,7 @@ export default function RoleSearchCard({ journeys }: { journeys: Journey[] }) {
                         email: j.candidate.email,
                         linkedin_url: j.candidate.linkedin_url ?? undefined,
                         notes: j.candidate.notes ?? undefined,
+                        target_role: j.candidate.target_role ?? undefined,
                         sourceCandidateId: j.candidate.id,
                       })
                     }
