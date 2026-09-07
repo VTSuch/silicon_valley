@@ -20,7 +20,11 @@ export default function RoleSearchCard({ journeys }: { journeys: Journey[] }) {
 
   const { due, snoozed } = useMemo(() => {
     const now = new Date()
-    const all = journeys.filter((j) => j.status === 'needs_role' || !j.candidate.role_id)
+    // Someone who dropped out, was rejected or is already placed is not
+    // looking for a role any more, whatever their role field says.
+    const all = journeys.filter(
+      (j) => j.active && (j.status === 'needs_role' || !j.candidate.role_id)
+    )
     const isSnoozed = (j: Journey) =>
       !!j.candidate.next_search_at && new Date(j.candidate.next_search_at) > now
 
