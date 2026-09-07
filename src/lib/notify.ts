@@ -70,8 +70,10 @@ const CANDIDATE_LABELS: Record<string, string> = {
   linkedin_url: 'LinkedIn',
   notes: 'Notes',
   hired_salary: 'Hired salary',
-  next_search_at: 'Next role search',
   role_id: 'Role',
+  // next_search_at is deliberately absent: snoozing a role search already
+  // logs a follow-up, and announcing the reminder date as well means two
+  // notifications for one action.
 }
 
 const ROLE_LABELS: Record<string, string> = {
