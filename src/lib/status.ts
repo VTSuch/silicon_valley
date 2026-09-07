@@ -168,11 +168,20 @@ export const BOARD_COLUMNS: BoardColumn[] = [
   { id: 'offer', label: 'Offer extended', statuses: ['offer'], entry: 'offer', color: 'bg-rose-500' },
   { id: 'hired', label: 'Hired', statuses: ['offer_accepted'], entry: 'offer_accepted', color: 'bg-emerald-500' },
   {
-    id: 'lost',
-    label: 'Rejected / Dropped',
-    statuses: ['cv_rejected', 'client_rejected', 'offer_rejected', 'candidate_quit'],
+    id: 'rejected',
+    label: 'Rejected',
+    statuses: ['cv_rejected', 'client_rejected', 'offer_rejected'],
     entry: 'client_rejected',
     color: 'bg-red-400',
+  },
+  // Dropping out is the candidate's own decision, not a client's no, so it
+  // gets its own column — and a colour that does not read as a rejection.
+  {
+    id: 'dropped',
+    label: 'Dropped',
+    statuses: ['candidate_quit'],
+    entry: 'candidate_quit',
+    color: 'bg-stone-400',
   },
 ]
 

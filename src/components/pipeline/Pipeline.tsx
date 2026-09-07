@@ -19,12 +19,11 @@ import { useJourneys } from '@/hooks/useData'
 import { useUI } from '@/context/UIContext'
 import { Journey } from '@/lib/journey'
 import { BOARD_COLUMNS, BoardColumn, midStep, rejectionFor, statusMeta } from '@/lib/status'
-import { inRange, relativeAgo, relativeDays, toDateInput, fromDateInput } from '@/lib/dates'
+import { inRange, relativeAgo, relativeDays } from '@/lib/dates'
 import DateRangePills, {
   RangeSelection,
   defaultSelection,
 } from '@/components/common/DateRangePills'
-import DateInput from '@/components/common/DateInput'
 import Modal from '@/components/common/Modal'
 import { PrimaryButton, GhostButton, inputClass } from '@/components/common/Field'
 
@@ -34,7 +33,6 @@ export default function Pipeline() {
   const { openCandidate } = useUI()
   const [dragging, setDragging] = useState<Journey | null>(null)
   const [query, setQuery] = useState('')
-  const [moveDate, setMoveDate] = useState(() => toDateInput(new Date()))
   const [range, setRange] = useState<RangeSelection>(defaultSelection)
   /** A hire waiting on the signed salary before it is recorded. */
   const [hire, setHire] = useState<Journey | null>(null)
@@ -82,7 +80,7 @@ export default function Pipeline() {
     // Dropping into the column a card already sits in is a no-op — moving
     // between mid steps happens in the candidate panel.
     if (column.statuses.includes(journey.status)) return
-    const target = column.id === 'lost' ? rejectionFor(journey.status) : column.entry
+    const target = column.id === 'rejected' ? rejectionFor(journey.status) : column.entry
     // A hire is not official until we know what they signed at — ask first,
     // then record the move and the salary together.
     if (statusMeta(target).group === 'hired') {
@@ -90,7 +88,7 @@ export default function Pipeline() {
       setHire(journey)
       return
     }
-    await setStatus(id, target, fromDateInput(moveDate))
+    await setStatus(id, target, new Date())
   }
 
   const hireSalaryValue = Number(hireSalary)
@@ -103,7 +101,7 @@ export default function Pipeline() {
       await setStatus(
         hire.candidate.id,
         'offer_accepted',
-        fromDateInput(moveDate),
+        new Date(),
         undefined,
         hireSalaryValue
       )
@@ -124,7 +122,7 @@ export default function Pipeline() {
         <div>
           <h1 className="text-2xl font-semibold text-zinc-900">Pipeline</h1>
           <p className="text-sm text-zinc-500">
-            Drag a card to move a stage — the date below is what gets recorded.
+            Drag a card to move a stage — moves are recorded with today&apos;s date.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -144,15 +142,6 @@ export default function Pipeline() {
               className="w-48 rounded-lg border border-zinc-200 bg-white py-2 pl-9 pr-3 text-sm text-zinc-900 placeholder-zinc-400 outline-none focus:border-zinc-400"
             />
           </div>
-          <label className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-500">
-            Moves dated
-            <DateInput
-              eager
-              value={moveDate}
-              onChange={setMoveDate}
-              className="text-xs font-medium text-zinc-900 outline-none"
-            />
-          </label>
         </div>
       </div>
 
