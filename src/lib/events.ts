@@ -11,6 +11,8 @@ export interface CandidateSummary {
   /** Job title of the role they are on, or null while they need one. */
   jobTitle: string | null
   company: string | null
+  /** What we are hunting for, when they have no role yet. */
+  targetRole?: string | null
   bounty: number | null
   status: string
   email?: string | null
@@ -139,9 +141,16 @@ function who(name: string): Section {
 }
 
 /** Role and company always travel together, apart from everything else. */
-function placement(jobTitle: string | null, company: string | null): Section {
-  if (!jobTitle) return ['💼 <i>Looking for a role</i>']
-  return [`💼 ${escapeHtml(jobTitle)}`, company ? `🏢 ${escapeHtml(company)}` : null]
+function placement(candidate: CandidateSummary): Section {
+  if (!candidate.jobTitle) {
+    return candidate.targetRole
+      ? [`🔎 <i>Looking for:</i> ${escapeHtml(candidate.targetRole)}`]
+      : ['🔎 <i>Looking for a role</i>']
+  }
+  return [
+    `💼 ${escapeHtml(candidate.jobTitle)}`,
+    candidate.company ? `🏢 ${escapeHtml(candidate.company)}` : null,
+  ]
 }
 
 /** The money gets a line of its own — it is the part worth spotting fast. */
@@ -162,7 +171,7 @@ function changeLines(changes: FieldChange[]): Section {
 }
 
 function candidateBlocks(candidate: CandidateSummary): Section[] {
-  return [who(candidate.name), placement(candidate.jobTitle, candidate.company)]
+  return [who(candidate.name), placement(candidate)]
 }
 
 function roleBlocks(role: RoleSummary): Section[] {

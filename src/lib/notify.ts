@@ -35,7 +35,7 @@ export function statusLabel(status: CandidateStatus | null | undefined) {
 }
 
 export function candidateSummary(
-  candidate: Pick<Candidate, 'full_name' | 'email' | 'status' | 'hired_salary'>,
+  candidate: Pick<Candidate, 'full_name' | 'email' | 'status' | 'hired_salary' | 'target_role'>,
   role: Role | null | undefined
 ): CandidateSummary {
   // A hired salary with an agreed percentage beats the role's baseline bounty.
@@ -48,6 +48,7 @@ export function candidateSummary(
     name: candidate.full_name,
     jobTitle: role?.job_title ?? null,
     company: role?.company ?? null,
+    targetRole: candidate.target_role ?? null,
     bounty,
     status: statusLabel(candidate.status) ?? candidate.status,
     email: candidate.email ?? null,
