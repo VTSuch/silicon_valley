@@ -79,7 +79,8 @@ export default function Dashboard() {
   const activeList = useMemo(
     () =>
       cohort
-        .filter((j) => j.active && j.status !== 'needs_role')
+        // Standby and role-search candidates are parked, not being worked.
+        .filter((j) => j.active && j.status !== 'needs_role' && j.status !== 'standby')
         // Furthest along first: the reverse of the pipeline order, so Offer
         // extended sits on top and Calendly sent at the bottom.
         .sort(
