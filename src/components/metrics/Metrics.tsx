@@ -11,23 +11,39 @@ import ActivityBars, {
   ActivityBucket,
   ActivityLegend,
 } from './ActivityBars'
+import CumulativeAreas, { AreaSeries } from './CumulativeAreas'
 import PipelineValueChart, { ValuePoint } from './PipelineValueChart'
 import EarnedValueChart, { EarnedPoint } from './EarnedValueChart'
 import { METRIC_GROUPS, StageGroup, boardColumnFor } from '@/lib/status'
 import { inPlaySplitAt, reachedAt } from '@/lib/journey'
 import {
   Granularity,
+  addPeriods,
   daySeries,
   endOfDay,
   formatPeriod,
   inRange,
   periodKey,
-  periodWindow,
   presetRange,
+  startOfPeriod,
 } from '@/lib/dates'
 
 /** How many months or weeks the two bar charts show at once. */
 const WINDOW = 12
+
+/**
+ * The stacked bands of the cumulative view, bottom-first: the earliest stage
+ * at the bottom, the furthest on top, so the pile reads like the funnel.
+ */
+const STAGE_AREAS: AreaSeries[] = [...METRIC_GROUPS]
+  .reverse()
+  .map((g) => ({ id: g.id, label: g.label, fill: g.fill }))
+
+const ACTIVITY_AREAS: AreaSeries[] = ACTIVITY_SERIES.map((s) => ({
+  id: s.id,
+  label: s.label,
+  fill: s.fill,
+}))
 
 const EMPTY_COUNTS = (): Record<StageGroup, number> => ({
   lead: 0,
@@ -51,11 +67,41 @@ export default function Metrics() {
   const [granularity, setGranularity] = useState<Granularity>('month')
   /** How many periods back the visible window is scrolled. 0 = up to today. */
   const [offset, setOffset] = useState(0)
+  /** Running totals across the window instead of a figure per period. */
+  const [cumulative, setCumulative] = useState(false)
 
-  const periods = useMemo(
-    () => periodWindow(WINDOW, offset, granularity),
-    [offset, granularity]
-  )
+  /** Oldest thing on record, so "All time" has a left edge to start from. */
+  const earliest = useMemo(() => {
+    const times = journeys.map((j) => new Date(j.candidate.created_at).getTime())
+    return times.length ? new Date(Math.min(...times)) : new Date()
+  }, [journeys])
+
+  /**
+   * The visible periods, cut to the selected range: the charts never show a
+   * period the filter excludes, and the arrows stop at its edges rather than
+   * walking into empty bars. When the range is longer than the window, they
+   * scroll through it a period at a time.
+   */
+  const view = useMemo(() => {
+    const first = startOfPeriod(range.range.from ?? earliest, granularity)
+    const last = startOfPeriod(range.range.to ?? new Date(), granularity)
+    const all: Date[] = []
+    for (let d = first; d <= last; d = addPeriods(d, 1, granularity)) all.push(d)
+    if (all.length === 0) all.push(last)
+
+    const count = Math.min(WINDOW, all.length)
+    // `offset` counts periods back from the end of the range; clamp it so the
+    // window always sits fully inside it.
+    const end = Math.min(all.length - 1, Math.max(count - 1, all.length - 1 + offset))
+    const start = end - count + 1
+    return {
+      periods: all.slice(start, end + 1),
+      canGoBack: start > 0,
+      canGoForward: end < all.length - 1,
+    }
+  }, [range, earliest, granularity, offset])
+
+  const periods = view.periods
 
   /** Only candidates that actually reached the client, within the range. */
   const cohort = useMemo(
@@ -66,11 +112,6 @@ export default function Metrics() {
     [journeys, range]
   )
 
-  /**
-   * The two bar charts are governed by their own window, not by the range
-   * pills: the arrows already say which periods you are looking at, and
-   * applying both filters left half the bars blank for no visible reason.
-   */
   const buckets = useMemo<PeriodBucket[]>(() => {
     const map = new Map<string, PeriodBucket>()
     for (const start of periods) {
@@ -82,9 +123,8 @@ export default function Metrics() {
         rejected: 0,
       })
     }
-    for (const j of journeys) {
-      if (!j.submittedAt) continue
-      const bucket = map.get(periodKey(j.submittedAt, granularity))
+    for (const j of cohort) {
+      const bucket = map.get(periodKey(j.submittedAt as Date, granularity))
       if (!bucket) continue
       const group = j.furthest ?? 'submitted'
       bucket.counts[group] = (bucket.counts[group] ?? 0) + 1
@@ -94,7 +134,7 @@ export default function Metrics() {
       if (boardColumnFor(j.status, j.furthestRank) === 'rejected') bucket.rejected += 1
     }
     return [...map.values()]
-  }, [journeys, periods, granularity])
+  }, [cohort, periods, granularity])
 
   /**
    * Activity, counted when it happened rather than by submission cohort: the
@@ -113,13 +153,16 @@ export default function Metrics() {
       for (const series of ACTIVITY_SERIES) {
         const at = reachedAt(j, series.id)
         if (!at) continue
+        // A period at the edge of the range is only counted for the days the
+        // range actually covers, so the bar matches the filter exactly.
+        if ((range.range.from || range.range.to) && !inRange(at, range.range)) continue
         const bucket = map.get(periodKey(at, granularity))
         if (!bucket) continue
         bucket.counts[series.id] = (bucket.counts[series.id] ?? 0) + 1
       }
     }
     return [...map.values()]
-  }, [journeys, periods, granularity])
+  }, [journeys, periods, granularity, range])
 
   /** Conversion: share of the cohort that reached each stage or beyond. */
   const rates = useMemo(() => {
@@ -237,7 +280,10 @@ export default function Metrics() {
         </div>
         <DateRangePills
           value={range}
-          onChange={setRange}
+          onChange={(next) => {
+            setRange(next)
+            setOffset(0)
+          }}
           more={['focus_period', 'last_3_months', 'all_time']}
         />
       </div>
@@ -258,7 +304,9 @@ export default function Metrics() {
                   Submissions by {granularity}
                 </h2>
                 <p className="text-xs text-zinc-500">
-                  Each bar is one submission cohort, split by how far those candidates got.
+                  {cumulative
+                    ? 'Running totals across this window, stacked by how far those candidates got.'
+                    : `Each bar is one submission cohort, split by how far those candidates got.`}
                 </p>
               </div>
               <PeriodControls
@@ -271,11 +319,24 @@ export default function Metrics() {
                 }}
                 offset={offset}
                 onOffset={setOffset}
+                cumulative={cumulative}
+                onCumulative={setCumulative}
+                canGoBack={view.canGoBack}
+                canGoForward={view.canGoForward}
               />
             </div>
             <StageLegend />
           </div>
-          <StageBars buckets={buckets} granularity={granularity} />
+          {cumulative ? (
+            <CumulativeAreas
+              buckets={buckets}
+              series={STAGE_AREAS}
+              granularity={granularity}
+              emptyLabel="No submissions in this period."
+            />
+          ) : (
+            <StageBars buckets={buckets} granularity={granularity} />
+          )}
         </section>
 
         <section className="min-w-0 rounded-xl border border-zinc-200 bg-white p-5">
@@ -283,12 +344,23 @@ export default function Metrics() {
             <div>
               <h2 className="text-sm font-semibold text-zinc-900">Activity by {granularity}</h2>
               <p className="text-xs text-zinc-500">
-                What actually went out in each {granularity}, counted on the day it happened.
+                {cumulative
+                  ? 'Running totals across this window, counted on the day each happened.'
+                  : `What actually went out in each ${granularity}, counted on the day it happened.`}
               </p>
             </div>
             <ActivityLegend />
           </div>
-          <ActivityBars buckets={activity} granularity={granularity} />
+          {cumulative ? (
+            <CumulativeAreas
+              buckets={activity}
+              series={ACTIVITY_AREAS}
+              granularity={granularity}
+              emptyLabel="Nothing happened yet."
+            />
+          ) : (
+            <ActivityBars buckets={activity} granularity={granularity} />
+          )}
         </section>
       </div>
 
@@ -364,11 +436,19 @@ function PeriodControls({
   onGranularity,
   offset,
   onOffset,
+  cumulative,
+  onCumulative,
+  canGoBack,
+  canGoForward,
 }: {
   granularity: Granularity
   onGranularity: (g: Granularity) => void
   offset: number
   onOffset: (next: number) => void
+  cumulative: boolean
+  onCumulative: (next: boolean) => void
+  canGoBack: boolean
+  canGoForward: boolean
 }) {
   const step =
     'flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-200 text-zinc-500 transition hover:border-zinc-400 hover:text-zinc-900 disabled:opacity-30 disabled:hover:border-zinc-200 disabled:hover:text-zinc-500'
@@ -389,10 +469,23 @@ function PeriodControls({
           </button>
         ))}
       </div>
+      <button
+        type="button"
+        onClick={() => onCumulative(!cumulative)}
+        aria-pressed={cumulative}
+        className={`rounded-lg border px-2 py-1 text-xs font-medium transition ${
+          cumulative
+            ? 'border-zinc-900 bg-zinc-900 text-white'
+            : 'border-zinc-200 text-zinc-500 hover:border-zinc-400 hover:text-zinc-900'
+        }`}
+      >
+        Cumulative
+      </button>
       <div className="flex items-center gap-1">
         <button
           type="button"
           onClick={() => onOffset(offset - 1)}
+          disabled={!canGoBack}
           className={step}
           title={`Previous ${granularity}`}
         >
@@ -401,7 +494,7 @@ function PeriodControls({
         <button
           type="button"
           onClick={() => onOffset(Math.min(0, offset + 1))}
-          disabled={offset >= 0}
+          disabled={!canGoForward}
           className={step}
           title={`Next ${granularity}`}
         >
