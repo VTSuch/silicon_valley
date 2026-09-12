@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowRight,
   Bell,
@@ -25,16 +25,30 @@ import { splitLive } from '@/lib/journey'
 import FollowUpSettings from './FollowUpSettings'
 import RoleSearchCard from './RoleSearchCard'
 import NotesCard from './NotesCard'
+import UpcomingCalls from './UpcomingCalls'
 
 export default function Dashboard() {
   const journeys = useJourneys()
   const { rolesWithCount } = useRoles()
   const { openCandidate, openRole, setTab } = useUI()
-  const { logFollowUp, focusPeriodStart } = useData()
+  const { logFollowUp, focusPeriodStart, syncCalls } = useData()
   const [rulesOpen, setRulesOpen] = useState(false)
   const [scope, setScope] = useState<DashboardScope>('focus_period')
   /** Window for the recent-activity cards, independent of the scope toggle. */
   const [recentDays, setRecentDays] = useState<RecentWindow>(7)
+
+  // Opening the dashboard is as good a moment as any to pull Calendly, as
+  // long as it has not just happened — the scheduled job covers the rest.
+  const synced = useRef(false)
+  useEffect(() => {
+    if (synced.current) return
+    synced.current = true
+    const last = Number(window.localStorage.getItem(CALLS_SYNCED_AT) ?? 0)
+    if (Date.now() - last < SYNC_EVERY) return
+    void syncCalls().then((ok) => {
+      if (ok) window.localStorage.setItem(CALLS_SYNCED_AT, String(Date.now()))
+    })
+  }, [syncCalls])
 
   /**
    * The counts and the active list read the chosen scope; candidates enter it
@@ -364,7 +378,9 @@ export default function Dashboard() {
         <NotesCard />
       </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[70fr_150fr]">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 xl:grid-cols-[70fr_70fr_80fr]">
+        <UpcomingCalls />
+
         <RoleSearchCard journeys={journeys} />
 
         {/* Roles ------------------------------------------------------------ */}
@@ -412,6 +428,10 @@ export default function Dashboard() {
     </div>
   )
 }
+
+const CALLS_SYNCED_AT = 'sv:calls-synced-at'
+/** Leave Calendly alone for this long between page loads. */
+const SYNC_EVERY = 15 * 60 * 1000
 
 type DashboardScope = 'focus_period' | 'all_time'
 /** Days counted back from today, today itself included. */

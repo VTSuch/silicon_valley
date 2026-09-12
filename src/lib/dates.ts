@@ -231,3 +231,18 @@ export function periodWindow(
   for (let i = count - 1; i >= 0; i--) out.push(addPeriods(last, -i, granularity))
   return out
 }
+
+/** DD/MM/YY — the compact form used on board cards. */
+export function formatSlashDate(value: string | Date) {
+  const d = typeof value === 'string' ? new Date(value) : value
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${String(d.getFullYear()).slice(-2)}`
+}
+
+/** "Mon 14 Sep, 20:30" — a call's slot, in the reader's own timezone. */
+export function formatSlot(value: string | Date) {
+  const d = typeof value === 'string' ? new Date(value) : value
+  const day = d.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' })
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  return `${day}, ${time}`
+}

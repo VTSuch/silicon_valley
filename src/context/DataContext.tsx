@@ -11,6 +11,7 @@ import {
 } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
+  Call,
   Candidate,
   CandidateStatus,
   CandidateWithRole,
@@ -59,6 +60,13 @@ interface DataContextValue {
   statusEvents: StatusEvent[]
   followUps: FollowUp[]
   notes: Note[]
+  /** Calendly bookings, synced in. Ordered by when they start. */
+  calls: Call[]
+  /** Pulls Calendly again. Returns false when the sync could not run. */
+  syncCalls: () => Promise<boolean>
+  syncingCalls: boolean
+  /** Points a call at a candidate by hand, or clears it with null. */
+  linkCall: (callId: string, candidateId: string | null) => Promise<void>
   followUpRules: FollowUpRules
   saveFollowUpRules: (rules: FollowUpRules) => Promise<void>
   /** Start of "This focus period", shared by every date filter in the app. */
@@ -147,6 +155,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [statusEvents, setStatusEvents] = useState<StatusEvent[]>([])
   const [followUps, setFollowUps] = useState<FollowUp[]>([])
   const [notes, setNotes] = useState<Note[]>([])
+  const [calls, setCalls] = useState<Call[]>([])
+  const [syncingCalls, setSyncingCalls] = useState(false)
   const [followUpRules, setFollowUpRules] = useState<FollowUpRules>({})
   const [focusPeriodStart, setFocusPeriodStart] = useState<Date>(DEFAULT_FOCUS_PERIOD_START)
   const [loading, setLoading] = useState(true)
@@ -177,7 +187,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const refresh = useCallback(async () => {
-    const [rolesRes, candidatesRes, eventsRes, followUpsRes, notesRes, settingsRes] =
+    const [rolesRes, candidatesRes, eventsRes, followUpsRes, notesRes, callsRes, settingsRes] =
       await Promise.all([
       supabase.from('roles').select('*').order('created_at', { ascending: false }),
       supabase.from('candidates').select(CANDIDATE_SELECT).order('created_at', { ascending: false }),
@@ -190,6 +200,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         .select('*')
         .order('occurred_at', { ascending: true }),
       supabase.from('notes').select('*').order('created_at', { ascending: false }),
+      supabase.from('calls').select('*').order('starts_at', { ascending: true }),
       supabase
         .from('app_settings')
         .select('key, value')
@@ -226,6 +237,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setNotes((notesRes.data as Note[]) ?? [])
     }
 
+    if (callsRes.error) {
+      // The calls table may not exist yet — the rest still works.
+      console.warn('Calls unavailable:', callsRes.error.message)
+      setCalls([])
+    } else {
+      setCalls((callsRes.data as Call[]) ?? [])
+    }
+
     if (settingsRes.error) {
       // The settings table may not exist yet — defaults still apply.
       console.warn('Settings unavailable:', settingsRes.error.message)
@@ -256,6 +275,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setStatusEvents([])
         setFollowUps([])
         setNotes([])
+        setCalls([])
         setFollowUpRules({})
         setSignedIn(false)
         setLoading(false)
@@ -291,6 +311,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         () => refresh()
       )
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notes' }, () => refresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'calls' }, () => refresh())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () =>
         refresh()
       )
@@ -371,6 +392,49 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase
       .from('app_settings')
       .upsert({ key: FOLLOW_UP_KEY, value: rules, updated_at: new Date().toISOString() })
+    if (error) throw error
+  }, [])
+
+  /**
+   * Asks the server to pull Calendly again. The endpoint does the matching
+   * and any automatic stage move; realtime brings the result back, so there
+   * is nothing to merge here.
+   */
+  const syncCalls = useCallback(async () => {
+    setSyncingCalls(true)
+    try {
+      const { data } = await supabase.auth.getSession()
+      const token = data.session?.access_token
+      if (!token) return false
+      const res = await fetch('/api/calls/sync', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string }
+        console.warn('Calendly sync failed:', body.error ?? res.status)
+        return false
+      }
+      await refresh()
+      return true
+    } catch (e) {
+      console.warn('Calendly sync failed', e)
+      return false
+    } finally {
+      setSyncingCalls(false)
+    }
+  }, [refresh])
+
+  const linkCall = useCallback(async (callId: string, candidateId: string | null) => {
+    // 'manual' is what stops the next sync from overruling the choice.
+    const match = candidateId ? 'manual' : 'none'
+    setCalls((prev) =>
+      prev.map((c) => (c.id === callId ? { ...c, candidate_id: candidateId, match } : c))
+    )
+    const { error } = await supabase
+      .from('calls')
+      .update({ candidate_id: candidateId, match })
+      .eq('id', callId)
     if (error) throw error
   }, [])
 
@@ -587,6 +651,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       statusEvents,
       followUps,
       notes,
+      calls,
+      syncCalls,
+      syncingCalls,
+      linkCall,
       followUpRules,
       saveFollowUpRules,
       focusPeriodStart,
@@ -618,6 +686,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       statusEvents,
       followUps,
       notes,
+      calls,
+      syncCalls,
+      syncingCalls,
+      linkCall,
       followUpRules,
       saveFollowUpRules,
       focusPeriodStart,

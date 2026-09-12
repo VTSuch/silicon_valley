@@ -13,13 +13,13 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core'
-import { AlertTriangle, Check, PartyPopper, Search } from 'lucide-react'
+import { AlertTriangle, CalendarClock, Check, PartyPopper, Search } from 'lucide-react'
 import { useData } from '@/context/DataContext'
 import { useJourneys } from '@/hooks/useData'
 import { useUI } from '@/context/UIContext'
 import { Journey } from '@/lib/journey'
 import { BOARD_COLUMNS, BoardColumn, boardColumnFor, midStep, rejectionFor, statusMeta } from '@/lib/status'
-import { inRange, relativeAgo, relativeDays } from '@/lib/dates'
+import { formatSlashDate, inRange, relativeAgo, relativeDays } from '@/lib/dates'
 import DateRangePills, {
   RangeSelection,
   defaultSelection,
@@ -29,7 +29,7 @@ import { PrimaryButton, GhostButton, inputClass } from '@/components/common/Fiel
 
 export default function Pipeline() {
   const journeys = useJourneys()
-  const { setStatus } = useData()
+  const { setStatus, calls } = useData()
   const { openCandidate } = useUI()
   const [dragging, setDragging] = useState<Journey | null>(null)
   const [query, setQuery] = useState('')
@@ -40,6 +40,19 @@ export default function Pipeline() {
   const [savingHire, setSavingHire] = useState(false)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
+
+  /**
+   * The next booked call per candidate, so a card can show when it is. Sorted
+   * ascending on load, so the first one seen for a candidate is the soonest.
+   */
+  const nextCall = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const call of [...calls].sort((a, b) => a.starts_at.localeCompare(b.starts_at))) {
+      if (call.status !== 'active' || !call.candidate_id) continue
+      if (!map.has(call.candidate_id)) map.set(call.candidate_id, call.starts_at)
+    }
+    return map
+  }, [calls])
 
   const columns = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -158,6 +171,7 @@ export default function Pipeline() {
               column={col.column}
               items={col.items}
               onOpen={openCandidate}
+              nextCall={nextCall}
             />
           ))}
         </div>
@@ -253,10 +267,12 @@ function Column({
   column,
   items,
   onOpen,
+  nextCall,
 }: {
   column: BoardColumn
   items: Journey[]
   onOpen: (id: string) => void
+  nextCall: Map<string, string>
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id })
   const value = items.reduce((sum, j) => sum + j.bounty, 0)
@@ -283,14 +299,28 @@ function Column({
 
       <div className="flex max-h-[calc(100vh-16rem)] min-h-24 flex-1 flex-col gap-2 overflow-y-auto p-2 pt-0">
         {items.map((j) => (
-          <Card key={j.candidate.id} journey={j} onOpen={onOpen} />
+          <Card
+            key={j.candidate.id}
+            journey={j}
+            onOpen={onOpen}
+            callAt={nextCall.get(j.candidate.id)}
+          />
         ))}
       </div>
     </div>
   )
 }
 
-function Card({ journey, onOpen }: { journey: Journey; onOpen: (id: string) => void }) {
+function Card({
+  journey,
+  onOpen,
+  callAt,
+}: {
+  journey: Journey
+  onOpen: (id: string) => void
+  /** When their next call is, for the candidates waiting on one. */
+  callAt?: string
+}) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: journey.candidate.id,
   })
@@ -323,6 +353,14 @@ function Card({ journey, onOpen }: { journey: Journey; onOpen: (id: string) => v
           </span>
         )}
       </div>
+      {callAt && (
+        <div className="mt-1.5">
+          <span className="inline-flex items-center gap-1 rounded bg-sky-50 px-1.5 py-0.5 text-[0.625rem] font-semibold text-sky-700">
+            <CalendarClock className="h-3 w-3" />
+            {formatSlashDate(callAt)}
+          </span>
+        </div>
+      )}
       <div className="mt-2 flex items-center justify-between gap-2">
         <span
           className={`inline-flex items-center gap-1 text-[0.6875rem] ${

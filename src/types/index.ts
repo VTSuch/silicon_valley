@@ -97,3 +97,28 @@ export interface Note {
 }
 
 export type RoleWithCount = Role & { candidateCount: number }
+
+/** How a Calendly booking found its candidate. */
+export type CallMatch = 'email' | 'name' | 'suggested' | 'manual' | 'none'
+
+export interface Call {
+  id: string
+  /** The Calendly scheduled_event URI. */
+  external_id: string
+  candidate_id: string | null
+  invitee_name: string
+  invitee_email?: string | null
+  /** Calendly's name for the booking type, e.g. "Initial Screening". */
+  event_name?: string | null
+  starts_at: string
+  ends_at?: string | null
+  join_url?: string | null
+  cancel_url?: string | null
+  reschedule_url?: string | null
+  status: 'active' | 'canceled'
+  match: CallMatch
+  /** Whatever the invitee typed into the booking form. */
+  notes?: string | null
+  remote_updated_at?: string | null
+  created_at: string
+}
