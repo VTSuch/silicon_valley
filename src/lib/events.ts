@@ -4,7 +4,13 @@
  * Payloads carry already-resolved, human-readable fields: the browser knows
  * the role behind a candidate and the label behind a status, so the notifier
  * never has to go back to the database to write a sentence.
+ *
+ * Everything here has to work on the server too — the call sync announces the
+ * moves it makes from a route handler, with no browser in sight.
  */
+
+import { Candidate, CandidateStatus, Role } from '@/types'
+import { STATUS_META } from './status'
 
 export interface CandidateSummary {
   name: string
@@ -16,6 +22,31 @@ export interface CandidateSummary {
   bounty: number | null
   status: string
   email?: string | null
+}
+
+export function statusLabel(status: CandidateStatus | null | undefined) {
+  return status ? STATUS_META[status]?.label ?? status : null
+}
+
+export function candidateSummary(
+  candidate: Pick<Candidate, 'full_name' | 'email' | 'status' | 'hired_salary' | 'target_role'>,
+  role: Role | null | undefined
+): CandidateSummary {
+  // A hired salary with an agreed percentage beats the role's baseline bounty.
+  const bounty =
+    candidate.hired_salary && role?.bounty_pct
+      ? Math.round((candidate.hired_salary * role.bounty_pct) / 100)
+      : role?.bounty ?? null
+
+  return {
+    name: candidate.full_name,
+    jobTitle: role?.job_title ?? null,
+    company: role?.company ?? null,
+    targetRole: candidate.target_role ?? null,
+    bounty,
+    status: statusLabel(candidate.status) ?? candidate.status,
+    email: candidate.email ?? null,
+  }
 }
 
 export interface RoleSummary {

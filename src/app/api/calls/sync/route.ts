@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { CalendlyBooking, currentUser, invitees, scheduledEvents, toBooking } from '@/lib/calendly'
 import { matchBooking } from '@/lib/match'
-import { formatEvent } from '@/lib/events'
-import { candidateSummary, statusLabel } from '@/lib/notify'
+import { candidateSummary, formatEvent, statusLabel } from '@/lib/events'
 import { sendTelegram } from '@/lib/telegram'
 import { CandidateWithRole } from '@/types'
 
@@ -99,8 +98,18 @@ export async function POST(req: NextRequest) {
       )
     ).filter((b): b is CalendlyBooking => b !== null)
 
-    const { data: candidateRows } = await db.from('candidates').select('*, role:roles(*)')
-    const candidates = (candidateRows as CandidateWithRole[]) ?? []
+    const { data: candidateRows, error: candidateError } = await db
+      .from('candidates')
+      .select('*, role:roles(*)')
+    // Without the candidates there is nothing to match against, and carrying
+    // on would quietly rewrite every booking as "nobody" — unlinking the lot.
+    // Far better to fail the sync and leave what is already stored alone.
+    if (candidateError || !candidateRows?.length) {
+      throw new Error(
+        `Could not load candidates to match against: ${candidateError?.message ?? 'none returned'}`
+      )
+    }
+    const candidates = candidateRows as CandidateWithRole[]
 
     let linked = 0
     let advanced = 0
@@ -113,10 +122,15 @@ export async function POST(req: NextRequest) {
         ? { candidate: candidates.find((c) => c.id === row.candidate_id) ?? null, kind: 'manual' as const, score: 1 }
         : matchBooking(booking, candidates)
 
+      // A booking that is already linked keeps its candidate when a later
+      // pass cannot place it. Matching should only ever add certainty.
+      const candidateId = match.candidate?.id ?? row?.candidate_id ?? null
+      const kind = match.candidate ? match.kind : row?.candidate_id ? row.match : match.kind
+
       const { error } = await db.from('calls').upsert(
         {
           external_id: booking.uri,
-          candidate_id: match.candidate?.id ?? null,
+          candidate_id: candidateId,
           invitee_name: booking.inviteeName,
           invitee_email: booking.inviteeEmail,
           event_name: booking.eventName,
@@ -126,7 +140,7 @@ export async function POST(req: NextRequest) {
           cancel_url: booking.cancelUrl,
           reschedule_url: booking.rescheduleUrl,
           status: booking.status,
-          match: match.kind,
+          match: kind,
           notes: booking.notes,
           remote_updated_at: booking.updatedAt,
         },
@@ -180,20 +194,25 @@ export async function POST(req: NextRequest) {
         note: AUTO_NOTE,
       })
 
-      // Same notification any manual move would send.
-      await sendTelegram(
-        formatEvent({
-          type: 'candidate_status_changed',
-          candidate: candidateSummary(
-            { ...candidate, status: 'calendly_booked' },
-            candidate.role
-          ),
-          from: statusLabel('calendly_sent'),
-          to: statusLabel('calendly_booked') ?? 'Calendly booked',
-          toId: 'calendly_booked',
-          note: AUTO_NOTE,
-        })
-      )
+      // Same notification any manual move would send. A failure here must not
+      // cost us the rest of the sync: the move is already recorded.
+      try {
+        await sendTelegram(
+          formatEvent({
+            type: 'candidate_status_changed',
+            candidate: candidateSummary(
+              { ...candidate, status: 'calendly_booked' },
+              candidate.role
+            ),
+            from: statusLabel('calendly_sent'),
+            to: statusLabel('calendly_booked') ?? 'Calendly booked',
+            toId: 'calendly_booked',
+            note: AUTO_NOTE,
+          })
+        )
+      } catch (e) {
+        console.warn('Could not announce the automatic move', e)
+      }
     }
 
     // Bookings that vanished from Calendly entirely (deleted, not cancelled)

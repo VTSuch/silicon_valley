@@ -1,9 +1,18 @@
 'use client'
 
 import { supabase } from '@/lib/supabase'
-import { CandidateSummary, FieldChange, PipelineEvent, RoleSummary } from '@/lib/events'
-import { STATUS_META } from '@/lib/status'
-import { Candidate, CandidateStatus, Role } from '@/types'
+import {
+  FieldChange,
+  PipelineEvent,
+  RoleSummary,
+  candidateSummary,
+  statusLabel,
+} from '@/lib/events'
+import { Role } from '@/types'
+
+// Both live in events.ts so the server can use them too; re-exported here
+// because the rest of the client imports them from this module.
+export { candidateSummary, statusLabel }
 
 /**
  * Announces pipeline activity on Telegram.
@@ -28,31 +37,6 @@ export function notify(event: PipelineEvent) {
       console.warn('Telegram notification failed', e)
     }
   })()
-}
-
-export function statusLabel(status: CandidateStatus | null | undefined) {
-  return status ? STATUS_META[status]?.label ?? status : null
-}
-
-export function candidateSummary(
-  candidate: Pick<Candidate, 'full_name' | 'email' | 'status' | 'hired_salary' | 'target_role'>,
-  role: Role | null | undefined
-): CandidateSummary {
-  // A hired salary with an agreed percentage beats the role's baseline bounty.
-  const bounty =
-    candidate.hired_salary && role?.bounty_pct
-      ? Math.round((candidate.hired_salary * role.bounty_pct) / 100)
-      : role?.bounty ?? null
-
-  return {
-    name: candidate.full_name,
-    jobTitle: role?.job_title ?? null,
-    company: role?.company ?? null,
-    targetRole: candidate.target_role ?? null,
-    bounty,
-    status: statusLabel(candidate.status) ?? candidate.status,
-    email: candidate.email ?? null,
-  }
 }
 
 export function roleSummary(role: Role): RoleSummary {
