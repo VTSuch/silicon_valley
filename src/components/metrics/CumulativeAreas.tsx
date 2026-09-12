@@ -116,7 +116,19 @@ export default function CumulativeAreas({
   const n = buckets.length
   const x = (i: number) => (n === 1 ? 50 : (i / (n - 1)) * 100)
   const y = (v: number) => 100 - (v / max) * 100
-  const points = (values: number[]) => values.map((v, i) => ({ x: x(i), y: y(v) }))
+
+  /**
+   * A single period has no width to draw a curve across, which left the chart
+   * looking empty even though there was data in it. Stretch that one value
+   * into a flat band over the whole plot instead.
+   */
+  const points = (values: number[]) =>
+    n === 1
+      ? [
+          { x: 0, y: y(values[0] ?? 0) },
+          { x: 100, y: y(values[0] ?? 0) },
+        ]
+      : values.map((v, i) => ({ x: x(i), y: y(v) }))
 
   return (
     <div
@@ -172,6 +184,31 @@ export default function CumulativeAreas({
                 )
               })}
             </svg>
+
+            {/* Markers on every value. SVG circles would come out as ovals
+                under preserveAspectRatio="none", so these are plain elements
+                positioned over the plot. Bands with nothing in them yet stay
+                bare rather than trailing dots along the baseline. */}
+            <div className="pointer-events-none absolute inset-0">
+              {series.map((s, k) =>
+                buckets.map((b, i) =>
+                  (totals[s.id]?.[i] ?? 0) > 0 ? (
+                    <span
+                      key={`${s.id}-${b.label}`}
+                      className="absolute block rounded-full ring-2 ring-white"
+                      style={{
+                        width: 6,
+                        height: 6,
+                        backgroundColor: s.fill,
+                        left: `${x(i)}%`,
+                        top: `${y(bands[k][i])}%`,
+                        transform: 'translate(-50%, -50%)',
+                      }}
+                    />
+                  ) : null
+                )
+              )}
+            </div>
 
             {/* Hover columns, one per period, over the curves. */}
             <div className="absolute inset-0 flex">
