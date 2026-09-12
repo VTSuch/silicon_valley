@@ -42,3 +42,6 @@ next-env.d.ts
 
 # Local agent/editor config
 .claude/
+
+# Throwaway diagnostic scripts run against the live database.
+*.local.mts
