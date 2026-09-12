@@ -74,22 +74,26 @@ export async function POST(req: NextRequest) {
   // Calendly round trips, fifteen seconds into the request, where a slow reply
   // came back as a gateway timeout and took the whole sync with it. There is
   // also nothing to sync without it, so failing here costs nothing.
+  // Supabase returns the odd gateway timeout on this one, so give it a few
+  // goes before abandoning the run — a sync that gives up is a sync that does
+  // not happen for another quarter of an hour.
+  const BACKOFF = [400, 1500, 4000]
   let candidates: CandidateWithRole[] = []
-  for (let attempt = 0; attempt < 2; attempt++) {
+  let lastError = 'none returned'
+  for (let attempt = 0; attempt < BACKOFF.length; attempt++) {
     const { data, error } = await db.from('candidates').select('*, role:roles(*)')
     if (data?.length) {
       candidates = data as CandidateWithRole[]
       break
     }
-    if (attempt === 1) {
-      return NextResponse.json(
-        {
-          error: `Could not load candidates to match against: ${error?.message ?? 'none returned'}`,
-        },
-        { status: 502 }
-      )
-    }
-    await new Promise((resolve) => setTimeout(resolve, 750))
+    lastError = error?.message ?? 'none returned'
+    await new Promise((resolve) => setTimeout(resolve, BACKOFF[attempt]))
+  }
+  if (!candidates.length) {
+    return NextResponse.json(
+      { error: `Could not load candidates to match against: ${lastError}` },
+      { status: 502 }
+    )
   }
 
   const now = new Date()
@@ -110,10 +114,17 @@ export async function POST(req: NextRequest) {
 
     // Invitees are a request per booking, so skip the ones Calendly says have
     // not changed since the last sync and that already found their candidate.
+    //
+    // Compared as instants rather than as text: Postgres hands the timestamp
+    // back as "+00:00" where Calendly wrote "Z", so string equality never held
+    // and every run re-fetched every booking it already had.
+    const unchanged = (stored: string | null, remote: string) =>
+      !!stored && new Date(stored).getTime() === new Date(remote).getTime()
+
     const fresh = events.filter((e) => {
       const row = existing.get(e.uri)
       if (!row) return true
-      if (row.remote_updated_at !== e.updated_at) return true
+      if (!unchanged(row.remote_updated_at, e.updated_at)) return true
       return !row.candidate_id && row.match !== 'manual'
     })
 
