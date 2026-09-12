@@ -176,6 +176,7 @@ export const BOARD_COLUMNS: BoardColumn[] = [
   },
   // Dropping out is the candidate's own decision, not a client's no, so it
   // gets its own column — and a colour that does not read as a rejection.
+  // Only for drops before the client engaged: see `boardColumnFor`.
   {
     id: 'dropped',
     label: 'Dropped',
@@ -184,6 +185,22 @@ export const BOARD_COLUMNS: BoardColumn[] = [
     color: 'bg-stone-400',
   },
 ]
+
+/** Rank of the first stage past submitted: a real step in the client's process. */
+export const PAST_SUBMITTED_RANK = 2
+
+/**
+ * Which board column a candidate belongs in. Almost always their status alone
+ * decides it — the exception is a candidate who dropped out. Dropping out
+ * before anyone interviewed them is a sourcing loss and stays in Dropped, but
+ * once they had reached first stage or beyond the opportunity is a lost one
+ * like any other rejection, so it counts under Rejected.
+ */
+export function boardColumnFor(status: string, furthestRank: number): string | null {
+  const normalized = normalizeStatus(status)
+  if (normalized === 'candidate_quit' && furthestRank >= PAST_SUBMITTED_RANK) return 'rejected'
+  return BOARD_COLUMNS.find((c) => c.statuses.includes(normalized))?.id ?? null
+}
 
 /**
  * Which rejection a candidate lands on when dropped in the Rejected column.

@@ -17,10 +17,11 @@ export type RangePresetId =
   | 'custom'
 
 /**
- * Start of the current focus period — the stretch of work we care about
- * right now. Change this one date to move the "This focus period" filter.
+ * Fallback start of the focus period — the stretch of work we care about
+ * right now. The live value is a setting (see `lib/settings`), edited on the
+ * Settings screen; this is only what applies before it has been loaded.
  */
-export const FOCUS_PERIOD_START = new Date(2026, 6, 1)
+export const DEFAULT_FOCUS_PERIOD_START = new Date(2026, 6, 1)
 
 export const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
 export const endOfDay = (d: Date) =>
@@ -50,7 +51,11 @@ export function addMonths(d: Date, n: number) {
   return c
 }
 
-export function presetRange(id: RangePresetId, now = new Date()): DateRange {
+export function presetRange(
+  id: RangePresetId,
+  focusStart: Date = DEFAULT_FOCUS_PERIOD_START,
+  now = new Date()
+): DateRange {
   switch (id) {
     case 'this_week':
       return { from: startOfWeek(now), to: endOfDay(now) }
@@ -60,7 +65,7 @@ export function presetRange(id: RangePresetId, now = new Date()): DateRange {
       return { from: new Date(now.getFullYear(), 0, 1), to: endOfDay(now) }
     case 'focus_period':
       // Open ended: everything from the start of the focus period onwards.
-      return { from: FOCUS_PERIOD_START, to: null }
+      return { from: startOfDay(focusStart), to: null }
     case 'last_3_months':
       return { from: startOfDay(addMonths(now, -3)), to: endOfDay(now) }
     default:
@@ -156,5 +161,73 @@ export function daySeries(from: Date, to: Date, maxPoints = 90): Date[] {
   for (let i = 0; i <= total; i += step) out.push(addDays(startOfDay(from), i))
   const end = startOfDay(to)
   if (out[out.length - 1]?.getTime() !== end.getTime()) out.push(end)
+  return out
+}
+
+export const endOfWeek = (d: Date) => endOfDay(addDays(startOfWeek(d), 6))
+
+export function addWeeks(d: Date, n: number) {
+  return addDays(d, n * 7)
+}
+
+export function weekKey(value: string | Date) {
+  const d = typeof value === 'string' ? new Date(value) : value
+  return `w${toDateInput(startOfWeek(d))}`
+}
+
+/** "12 Jan" — the Monday the week starts on. */
+export function formatWeek(value: string | Date) {
+  const d = typeof value === 'string' ? new Date(value) : value
+  return formatShortDate(startOfWeek(d))
+}
+
+/** "Week of 12 Jan 2026", for tooltips. */
+export function formatFullWeek(value: string | Date) {
+  return `Week of ${formatDate(startOfWeek(typeof value === 'string' ? new Date(value) : value))}`
+}
+
+// --- Periods: months or weeks, behind one interface -------------------------
+
+export type Granularity = 'month' | 'week'
+
+/** Start of the period a date falls in. */
+export function startOfPeriod(value: Date, granularity: Granularity) {
+  return granularity === 'month' ? startOfMonth(value) : startOfWeek(value)
+}
+
+/** Move `n` periods forward (negative goes back). */
+export function addPeriods(value: Date, n: number, granularity: Granularity) {
+  return granularity === 'month' ? addMonths(value, n) : addWeeks(value, n)
+}
+
+/** Bucket key: two dates share it exactly when they fall in the same period. */
+export function periodKey(value: string | Date, granularity: Granularity) {
+  return granularity === 'month' ? monthKey(value) : weekKey(value)
+}
+
+/** Short axis label. */
+export function formatPeriod(value: string | Date, granularity: Granularity) {
+  return granularity === 'month' ? formatMonth(value) : formatWeek(value)
+}
+
+/** Full label, for tooltips and headers. */
+export function formatFullPeriod(value: string | Date, granularity: Granularity) {
+  return granularity === 'month' ? formatFullMonth(value) : formatFullWeek(value)
+}
+
+/**
+ * The `count` periods ending `offset` periods before the one `now` sits in.
+ * `offset` 0 ends on the current period, -1 shifts the whole window one step
+ * into the past. Oldest first.
+ */
+export function periodWindow(
+  count: number,
+  offset: number,
+  granularity: Granularity,
+  now = new Date()
+): Date[] {
+  const last = addPeriods(startOfPeriod(now, granularity), offset, granularity)
+  const out: Date[] = []
+  for (let i = count - 1; i >= 0; i--) out.push(addPeriods(last, -i, granularity))
   return out
 }

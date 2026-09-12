@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   LogOut,
   Plus,
+  Settings,
   Users,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -127,6 +128,16 @@ export default function TopNav({ userEmail, onAddCandidate, onAddRole }: TopNavP
             <div className="sv-fade-in absolute right-0 top-full z-50 mt-2 w-56 rounded-xl border border-zinc-200 bg-white p-1.5 shadow-lg">
               <div className="truncate px-3 py-2 text-xs text-zinc-500">{userEmail}</div>
               <div className="my-1 h-px bg-zinc-100" />
+              <button
+                onClick={() => {
+                  setMenuOpen(false)
+                  setTab('settings')
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50"
+              >
+                <Settings className="h-4 w-4 text-zinc-400" />
+                Settings
+              </button>
               <button
                 onClick={() => supabase.auth.signOut()}
                 className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50"

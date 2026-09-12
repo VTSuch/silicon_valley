@@ -1,23 +1,33 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useJourneys } from '@/hooks/useData'
 import { useUI } from '@/context/UIContext'
 import DateRangePills, { RangeSelection } from '@/components/common/DateRangePills'
-import StageBars, { MonthBucket, StageLegend } from './StageBars'
+import StageBars, { PeriodBucket, StageLegend } from './StageBars'
+import ActivityBars, {
+  ACTIVITY_SERIES,
+  ActivityBucket,
+  ActivityLegend,
+} from './ActivityBars'
 import PipelineValueChart, { ValuePoint } from './PipelineValueChart'
 import EarnedValueChart, { EarnedPoint } from './EarnedValueChart'
-import { METRIC_GROUPS, StageGroup } from '@/lib/status'
-import { inPlaySplitAt } from '@/lib/journey'
+import { METRIC_GROUPS, StageGroup, boardColumnFor } from '@/lib/status'
+import { inPlaySplitAt, reachedAt } from '@/lib/journey'
 import {
+  Granularity,
   daySeries,
   endOfDay,
-  formatMonth,
+  formatPeriod,
   inRange,
-  monthKey,
-  monthsBetween,
+  periodKey,
+  periodWindow,
   presetRange,
 } from '@/lib/dates'
+
+/** How many months or weeks the two bar charts show at once. */
+const WINDOW = 12
 
 const EMPTY_COUNTS = (): Record<StageGroup, number> => ({
   lead: 0,
@@ -37,6 +47,15 @@ export default function Metrics() {
     preset: 'this_year',
     range: presetRange('this_year'),
   })
+  /** Month or week buckets, shared by both bar charts. */
+  const [granularity, setGranularity] = useState<Granularity>('month')
+  /** How many periods back the visible window is scrolled. 0 = up to today. */
+  const [offset, setOffset] = useState(0)
+
+  const periods = useMemo(
+    () => periodWindow(WINDOW, offset, granularity),
+    [offset, granularity]
+  )
 
   /** Only candidates that actually reached the client, within the range. */
   const cohort = useMemo(
@@ -47,30 +66,60 @@ export default function Metrics() {
     [journeys, range]
   )
 
-  const buckets = useMemo<MonthBucket[]>(() => {
-    if (cohort.length === 0) return []
-    const dates = cohort.map((j) => j.submittedAt as Date)
-    const first = new Date(Math.min(...dates.map((d) => d.getTime())))
-    const last = new Date(Math.max(...dates.map((d) => d.getTime())))
-
-    const map = new Map<string, MonthBucket>()
-    for (const month of monthsBetween(first, last)) {
-      map.set(monthKey(month), {
-        month,
-        label: formatMonth(month),
+  /**
+   * The two bar charts are governed by their own window, not by the range
+   * pills: the arrows already say which periods you are looking at, and
+   * applying both filters left half the bars blank for no visible reason.
+   */
+  const buckets = useMemo<PeriodBucket[]>(() => {
+    const map = new Map<string, PeriodBucket>()
+    for (const start of periods) {
+      map.set(periodKey(start, granularity), {
+        start,
+        label: formatPeriod(start, granularity),
         counts: EMPTY_COUNTS(),
         total: 0,
+        rejected: 0,
       })
     }
-    for (const j of cohort) {
-      const bucket = map.get(monthKey(j.submittedAt as Date))
+    for (const j of journeys) {
+      if (!j.submittedAt) continue
+      const bucket = map.get(periodKey(j.submittedAt, granularity))
       if (!bucket) continue
       const group = j.furthest ?? 'submitted'
       bucket.counts[group] = (bucket.counts[group] ?? 0) + 1
       bucket.total += 1
+      // Same rule as the board: a candidate who dropped out after the client
+      // had started interviewing them counts as a rejection, not a drop-out.
+      if (boardColumnFor(j.status, j.furthestRank) === 'rejected') bucket.rejected += 1
     }
     return [...map.values()]
-  }, [cohort])
+  }, [journeys, periods, granularity])
+
+  /**
+   * Activity, counted when it happened rather than by submission cohort: the
+   * invites sent, the calls booked and the CVs sent out in each period.
+   */
+  const activity = useMemo<ActivityBucket[]>(() => {
+    const map = new Map<string, ActivityBucket>()
+    for (const start of periods) {
+      map.set(periodKey(start, granularity), {
+        start,
+        label: formatPeriod(start, granularity),
+        counts: {},
+      })
+    }
+    for (const j of journeys) {
+      for (const series of ACTIVITY_SERIES) {
+        const at = reachedAt(j, series.id)
+        if (!at) continue
+        const bucket = map.get(periodKey(at, granularity))
+        if (!bucket) continue
+        bucket.counts[series.id] = (bucket.counts[series.id] ?? 0) + 1
+      }
+    }
+    return [...map.values()]
+  }, [journeys, periods, granularity])
 
   /** Conversion: share of the cohort that reached each stage or beyond. */
   const rates = useMemo(() => {
@@ -186,7 +235,11 @@ export default function Metrics() {
             Candidates count in the month they were submitted, whatever happens later.
           </p>
         </div>
-        <DateRangePills value={range} onChange={setRange} />
+        <DateRangePills
+          value={range}
+          onChange={setRange}
+          more={['focus_period', 'last_3_months', 'all_time']}
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -196,18 +249,48 @@ export default function Metrics() {
         <Tile label="Bounty earned" value={`$${totals.hireValue.toLocaleString()}`} />
       </div>
 
-      <section className="rounded-xl border border-zinc-200 bg-white p-5">
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold text-zinc-900">Submissions by month</h2>
-            <p className="text-xs text-zinc-500">
-              Each bar is one submission cohort, split by how far those candidates got.
-            </p>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <section className="min-w-0 rounded-xl border border-zinc-200 bg-white p-5">
+          <div className="mb-4 space-y-2">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-900">
+                  Submissions by {granularity}
+                </h2>
+                <p className="text-xs text-zinc-500">
+                  Each bar is one submission cohort, split by how far those candidates got.
+                </p>
+              </div>
+              <PeriodControls
+                granularity={granularity}
+                onGranularity={(g) => {
+                  setGranularity(g)
+                  // Twelve weeks and twelve months are not the same distance
+                  // back, so a shared offset would land somewhere arbitrary.
+                  setOffset(0)
+                }}
+                offset={offset}
+                onOffset={setOffset}
+              />
+            </div>
+            <StageLegend />
           </div>
-          <StageLegend />
-        </div>
-        <StageBars buckets={buckets} />
-      </section>
+          <StageBars buckets={buckets} granularity={granularity} />
+        </section>
+
+        <section className="min-w-0 rounded-xl border border-zinc-200 bg-white p-5">
+          <div className="mb-4 space-y-2">
+            <div>
+              <h2 className="text-sm font-semibold text-zinc-900">Activity by {granularity}</h2>
+              <p className="text-xs text-zinc-500">
+                What actually went out in each {granularity}, counted on the day it happened.
+              </p>
+            </div>
+            <ActivityLegend />
+          </div>
+          <ActivityBars buckets={activity} granularity={granularity} />
+        </section>
+      </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <section className="rounded-xl border border-zinc-200 bg-white p-5 lg:col-span-1">
@@ -270,6 +353,60 @@ export default function Metrics() {
           </p>
           <EarnedValueChart points={earnedPoints} onSelectCandidate={openCandidate} />
         </section>
+      </div>
+    </div>
+  )
+}
+
+/** Month/week toggle plus the arrows that walk the window one period at a time. */
+function PeriodControls({
+  granularity,
+  onGranularity,
+  offset,
+  onOffset,
+}: {
+  granularity: Granularity
+  onGranularity: (g: Granularity) => void
+  offset: number
+  onOffset: (next: number) => void
+}) {
+  const step =
+    'flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-200 text-zinc-500 transition hover:border-zinc-400 hover:text-zinc-900 disabled:opacity-30 disabled:hover:border-zinc-200 disabled:hover:text-zinc-500'
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="inline-flex items-center gap-0.5 rounded-lg bg-zinc-100 p-0.5">
+        {(['month', 'week'] as Granularity[]).map((g) => (
+          <button
+            key={g}
+            type="button"
+            onClick={() => onGranularity(g)}
+            className={`rounded-md px-2 py-1 text-xs font-medium capitalize transition-colors ${
+              granularity === g ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-900'
+            }`}
+          >
+            {g}
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => onOffset(offset - 1)}
+          className={step}
+          title={`Previous ${granularity}`}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onOffset(Math.min(0, offset + 1))}
+          disabled={offset >= 0}
+          className={step}
+          title={`Next ${granularity}`}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
       </div>
     </div>
   )

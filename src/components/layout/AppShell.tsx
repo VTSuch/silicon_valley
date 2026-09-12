@@ -10,6 +10,7 @@ import Pipeline from '../pipeline/Pipeline'
 import Candidates from '../candidates/Candidates'
 import Roles from '../roles/Roles'
 import Metrics from '../metrics/Metrics'
+import Settings from '../settings/Settings'
 import CandidateDrawer from '../candidates/CandidateDrawer'
 import RoleDrawer from '../roles/RoleDrawer'
 import AddCandidateModal from '../candidates/AddCandidateModal'
@@ -44,6 +45,7 @@ export default function AppShell() {
             {tab === 'candidates' && <Candidates onAdd={() => openAddCandidate()} />}
             {tab === 'roles' && <Roles onAdd={() => setAddRole(true)} />}
             {tab === 'metrics' && <Metrics />}
+            {tab === 'settings' && <Settings />}
           </>
         )}
       </main>

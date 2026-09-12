@@ -24,6 +24,8 @@ export interface Journey {
   daysInStatus: number
   /** Furthest funnel group the candidate ever reached. */
   furthest: StageGroup | null
+  /** Rank of that furthest point, so callers can compare depths directly. */
+  furthestRank: number
   status: CandidateStatus
   active: boolean
   /** Days allowed in the current stage before chasing. null = never. */
@@ -114,6 +116,7 @@ export function buildJourney(
     since,
     daysInStatus,
     furthest,
+    furthestRank: maxRank,
     status,
     active: meta.active,
     limit,
@@ -145,6 +148,19 @@ export function buildJourneys(
   return candidates.map((c) =>
     buildJourney(c, byCandidate.get(c.id) ?? [], rules, followUpsBy.get(c.id) ?? [])
   )
+}
+
+/**
+ * When this candidate first reached a given stage, or null if they never did.
+ * Reads the event log, and falls back to the dates a journey already derives
+ * for candidates whose history predates the log.
+ */
+export function reachedAt(j: Journey, status: CandidateStatus): Date | null {
+  const event = j.events.find((e) => normalizeStatus(e.status) === status)
+  if (event) return asDate(event.occurred_at)
+  if (j.status === status) return j.since
+  if (status === 'submitted') return j.submittedAt
+  return null
 }
 
 /** Candidates whose bounty is in play at a given instant. */

@@ -17,7 +17,9 @@ import { useJourneys, useRoles } from '@/hooks/useData'
 import { useData } from '@/context/DataContext'
 import { useUI } from '@/context/UIContext'
 import { StatusBadge, SourcePill } from '@/components/common/StatusBadge'
-import { relativeAgo, relativeDays } from '@/lib/dates'
+import { addDays, inRange, presetRange, relativeAgo, relativeDays, startOfDay } from '@/lib/dates'
+import { reachedAt } from '@/lib/journey'
+import { ACTIVITY_SERIES } from '@/components/metrics/ActivityBars'
 import { pipelineOrder, statusMeta } from '@/lib/status'
 import { splitLive } from '@/lib/journey'
 import FollowUpSettings from './FollowUpSettings'
@@ -28,12 +30,26 @@ export default function Dashboard() {
   const journeys = useJourneys()
   const { rolesWithCount } = useRoles()
   const { openCandidate, openRole, setTab } = useUI()
-  const { logFollowUp } = useData()
+  const { logFollowUp, focusPeriodStart } = useData()
   const [rulesOpen, setRulesOpen] = useState(false)
+  const [scope, setScope] = useState<DashboardScope>('focus_period')
+  /** Window for the recent-activity cards, independent of the scope toggle. */
+  const [recentDays, setRecentDays] = useState<RecentWindow>(7)
 
-  // The dashboard is the whole picture; the date filters live on the
-  // pipeline and metrics tabs.
-  const cohort = journeys
+  /**
+   * The counts and the active list read the chosen scope; candidates enter it
+   * on the date they were submitted, falling back to when we added them, the
+   * same cohort rule the board and the metrics use. The follow-up queue, the
+   * role search and the notes stay outside it — they are about today, not
+   * about a period.
+   */
+  const cohort = useMemo(() => {
+    if (scope === 'all_time') return journeys
+    const range = presetRange('focus_period', focusPeriodStart)
+    return journeys.filter((j) =>
+      inRange(j.submittedAt ?? new Date(j.candidate.created_at), range)
+    )
+  }, [journeys, scope, focusPeriodStart])
 
   const stats = useMemo(() => {
     const active = cohort.filter((j) => j.active)
@@ -46,7 +62,7 @@ export default function Dashboard() {
     // El pipeline vivo, partido: lo que ya ha pasado la criba del cliente y
     // lo que todavía espera respuesta. No valen lo mismo, y sumarlos en una
     // sola cifra inflaba justo el número que se mira primero.
-    const { advanced, submitted: waiting } = splitLive(journeys)
+    const { advanced, submitted: waiting } = splitLive(cohort)
 
     return {
       active: active.length,
@@ -59,7 +75,7 @@ export default function Dashboard() {
       liveWaitingValue: waiting.reduce((s, j) => s + j.bounty, 0),
       liveCount: advanced.length + waiting.length,
     }
-  }, [cohort, journeys])
+  }, [cohort])
 
   const alerts = useMemo(
     () =>
@@ -89,6 +105,23 @@ export default function Dashboard() {
     [cohort]
   )
 
+  /**
+   * What has gone out lately, counted on the day it happened. This is a
+   * rolling window on purpose: it answers "am I still working" rather than
+   * "how is the focus period going", so the scope toggle does not touch it.
+   */
+  const recent = useMemo(() => {
+    const from = startOfDay(addDays(new Date(), -(recentDays - 1)))
+    const counts: Record<string, number> = {}
+    for (const j of journeys) {
+      for (const series of ACTIVITY_SERIES) {
+        const at = reachedAt(j, series.id)
+        if (at && at >= from) counts[series.id] = (counts[series.id] ?? 0) + 1
+      }
+    }
+    return counts
+  }, [journeys, recentDays])
+
   const topRoles = useMemo(
     () => [...rolesWithCount].sort((a, b) => b.candidateCount - a.candidateCount).slice(0, 8),
     [rolesWithCount]
@@ -104,41 +137,94 @@ export default function Dashboard() {
       </div>
 
       {/* KPIs ---------------------------------------------------------------- */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-        <Kpi
-          label="Live pipeline"
-          value={
-            <>
-              <span className="text-emerald-600">${stats.liveValue.toLocaleString()}</span>
-              {stats.liveWaitingValue > 0 && (
-                <span className="ml-1.5 text-base font-semibold text-zinc-900">
-                  (+${stats.liveWaitingValue.toLocaleString()})
-                </span>
-              )}
-            </>
-          }
-          sub={`${stats.liveCount} candidates in play`}
-          icon={CircleDollarSign}
-          highlight
-        />
-        <Kpi label="Submitted" value={stats.submitted} icon={Send} />
-        <Kpi label="Interviewing" value={stats.interviewing} icon={Users} />
-        <Kpi label="Offers out" value={stats.offers} icon={Handshake} />
-        <Kpi
-          label="Hires"
-          value={
-            <>
-              {stats.hires}
-              {stats.hireValue > 0 && (
-                <span className="ml-1.5 text-base font-semibold text-emerald-600">
-                  (+${stats.hireValue.toLocaleString()})
-                </span>
-              )}
-            </>
-          }
-          icon={Briefcase}
-        />
-        <Kpi label="Needs follow-up" value={alerts.length} icon={Bell} warn={alerts.length > 0} />
+      {/* Two blocks side by side. Each carries its own filter on the same
+          line, so both rows of cards start at the same height. */}
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-stretch">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex h-9 items-center">
+            <ScopeToggle value={scope} onChange={setScope} />
+          </div>
+          {/* Live pipeline is the headline, so it keeps twice the width of
+              the counts beside it. */}
+          <div className="mt-2 grid flex-1 grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-[1.7fr_1fr_1fr_1fr_1fr_1fr]">
+            <Kpi
+              className="col-span-2 xl:col-span-1"
+              label={
+                <>
+                  Live pipeline
+                  <span className="font-normal text-zinc-400">
+                    {' '}
+                    ({stats.liveCount} in play)
+                  </span>
+                </>
+              }
+              value={
+                <>
+                  <span className="text-emerald-600">${stats.liveValue.toLocaleString()}</span>
+                  {stats.liveWaitingValue > 0 && (
+                    <span className="ml-1.5 text-base font-semibold text-zinc-900">
+                      (+${stats.liveWaitingValue.toLocaleString()})
+                    </span>
+                  )}
+                </>
+              }
+              icon={CircleDollarSign}
+              highlight
+            />
+            <Kpi compact label="Submitted" value={stats.submitted} icon={Send} />
+            <Kpi compact label="Interviewing" value={stats.interviewing} icon={Users} />
+            <Kpi compact label="Offers out" value={stats.offers} icon={Handshake} />
+            <Kpi
+              compact
+              label="Hires"
+              value={
+                <>
+                  {stats.hires}
+                  {stats.hireValue > 0 && (
+                    <span className="ml-1 text-sm font-semibold text-emerald-600">
+                      (+${stats.hireValue.toLocaleString()})
+                    </span>
+                  )}
+                </>
+              }
+              icon={Briefcase}
+            />
+            <Kpi
+              compact
+              label="Needs follow-up"
+              value={alerts.length}
+              icon={Bell}
+              warn={alerts.length > 0}
+            />
+          </div>
+        </div>
+
+        {/* A rolling window on what has gone out, kept visibly apart from
+            the period figures on the left. */}
+        <div className="flex shrink-0 flex-col border-zinc-200 xl:border-l xl:pl-4">
+          <div className="flex h-9 items-center">
+            <RecentToggle value={recentDays} onChange={setRecentDays} />
+          </div>
+          <div className="mt-2 grid flex-1 grid-cols-3 gap-3">
+            {ACTIVITY_SERIES.map((series) => (
+              <div
+                key={series.id}
+                className="flex flex-col rounded-xl border border-zinc-200 bg-white p-3 xl:w-40"
+              >
+                <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-500">
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: series.fill }}
+                  />
+                  <span className="truncate">{series.label}</span>
+                </div>
+                <div className="mt-1.5 text-2xl font-semibold tabular-nums text-zinc-900">
+                  {recent[series.id] ?? 0}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Follow-ups, the live pipeline and the scratchpad, side by side. */}
@@ -327,35 +413,108 @@ export default function Dashboard() {
   )
 }
 
+type DashboardScope = 'focus_period' | 'all_time'
+/** Days counted back from today, today itself included. */
+type RecentWindow = 1 | 7 | 30
+
+const RECENT_WINDOWS: { days: RecentWindow; label: string }[] = [
+  { days: 1, label: 'Today' },
+  { days: 7, label: 'Last 7d' },
+  { days: 30, label: 'Last 30d' },
+]
+
+/** The heading of the recent-activity block doubles as its window picker. */
+function RecentToggle({
+  value,
+  onChange,
+}: {
+  value: RecentWindow
+  onChange: (next: RecentWindow) => void
+}) {
+  return (
+    <div className="inline-flex items-center gap-1 text-sm font-semibold">
+      {RECENT_WINDOWS.map((w, i) => (
+        <span key={w.days} className="inline-flex items-center gap-1">
+          {i > 0 && <span className="text-zinc-300">/</span>}
+          <button
+            type="button"
+            onClick={() => onChange(w.days)}
+            className={`transition-colors ${
+              value === w.days ? 'text-zinc-900' : 'text-zinc-400 hover:text-zinc-600'
+            }`}
+          >
+            {w.label}
+          </button>
+        </span>
+      ))}
+    </div>
+  )
+}
+
+/** Two-value date filter for the counts and the active list. */
+function ScopeToggle({
+  value,
+  onChange,
+}: {
+  value: DashboardScope
+  onChange: (next: DashboardScope) => void
+}) {
+  const options: { id: DashboardScope; label: string }[] = [
+    { id: 'focus_period', label: 'This focus period' },
+    { id: 'all_time', label: 'All time' },
+  ]
+  return (
+    <div className="inline-flex items-center gap-1 rounded-full bg-zinc-100 p-1">
+      {options.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          onClick={() => onChange(o.id)}
+          className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+            value === o.id ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-white hover:text-zinc-900'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function Kpi({
   label,
   value,
-  sub,
-  subClassName = 'text-zinc-400',
   icon: Icon,
   highlight,
   warn,
+  compact,
+  className = '',
 }: {
-  label: string
+  label: React.ReactNode
   value: React.ReactNode
-  sub?: string
-  subClassName?: string
   icon: React.ElementType
   highlight?: boolean
   warn?: boolean
+  /** Half-width tile: the icon goes, the label wraps instead of truncating. */
+  compact?: boolean
+  className?: string
 }) {
   return (
     <div
-      className={`rounded-xl border bg-white p-4 ${
+      className={`min-w-0 rounded-xl border bg-white ${compact ? 'p-3' : 'p-4'} ${
         highlight ? 'border-zinc-900 ring-1 ring-zinc-900' : 'border-zinc-200'
-      }`}
+      } ${className}`}
     >
-      <div className="flex items-center gap-2 text-xs font-medium text-zinc-500">
-        <Icon className={`h-3.5 w-3.5 ${warn ? 'text-amber-500' : 'text-zinc-400'}`} />
-        {label}
+      <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-500">
+        {!compact && (
+          <Icon className={`h-3.5 w-3.5 shrink-0 ${warn ? 'text-amber-500' : 'text-zinc-400'}`} />
+        )}
+        {/* One line, always: the tiles are tight now that the subtitle row
+            is gone, and a wrapping label would make them uneven. */}
+        <span className="min-w-0 truncate">{label}</span>
+        {compact && warn && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />}
       </div>
       <div className="mt-1.5 text-2xl font-semibold tabular-nums text-zinc-900">{value}</div>
-      {sub && <div className={`mt-0.5 truncate text-xs ${subClassName}`}>{sub}</div>}
     </div>
   )
 }

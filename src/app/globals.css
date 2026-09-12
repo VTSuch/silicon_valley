@@ -16,8 +16,10 @@
 }
 
 html {
-  /* Everything is sized in rem, so the whole UI scales from this one knob. */
-  font-size: 90%;
+  /* Everything is sized in rem, so the whole UI scales from this one knob.
+     81% is the old 90% taken down another notch — the density the app was
+     being read at with the browser itself zoomed to 90%. */
+  font-size: 81%;
 }
 
 html,

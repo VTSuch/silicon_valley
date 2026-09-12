@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { CalendarDays, Check, ChevronDown } from 'lucide-react'
+import { useData } from '@/context/DataContext'
 import Calendar from './Calendar'
 import DateWheel from './DateWheel'
 import {
@@ -59,6 +60,19 @@ export default function DateRangePills({
   const [wheelFrom, setWheelFrom] = useState<Date>(() => startOfDay(new Date()))
   const [wheelTo, setWheelTo] = useState<Date>(() => startOfDay(new Date()))
   const ref = useRef<HTMLDivElement>(null)
+  const { focusPeriodStart } = useData()
+
+  // The focus period start is a setting: it arrives after the first render and
+  // can be edited while a filter is on it, so re-derive the range when it moves.
+  const onChangeRef = useRef(onChange)
+  useEffect(() => {
+    onChangeRef.current = onChange
+  })
+  const preset = value.preset
+  useEffect(() => {
+    if (preset !== 'focus_period') return
+    onChangeRef.current({ preset, range: presetRange(preset, focusPeriodStart) })
+  }, [preset, focusPeriodStart])
 
   useEffect(() => {
     if (!open) return
@@ -73,7 +87,7 @@ export default function DateRangePills({
   }, [open])
 
   const select = (preset: RangePresetId) => {
-    onChange({ preset, range: presetRange(preset) })
+    onChange({ preset, range: presetRange(preset, focusPeriodStart) })
     setOpen(false)
     setPicking(false)
   }

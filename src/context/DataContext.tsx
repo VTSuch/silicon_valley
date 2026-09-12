@@ -19,7 +19,15 @@ import {
   Role,
   StatusEvent,
 } from '@/types'
-import { FOLLOW_UP_KEY, FollowUpRules, parseRules } from '@/lib/settings'
+import {
+  FOCUS_PERIOD_KEY,
+  FOLLOW_UP_KEY,
+  FollowUpRules,
+  parseFocusPeriodStart,
+  parseRules,
+  serializeFocusPeriodStart,
+} from '@/lib/settings'
+import { DEFAULT_FOCUS_PERIOD_START } from '@/lib/dates'
 import {
   candidateSummary,
   diffCandidate,
@@ -53,6 +61,9 @@ interface DataContextValue {
   notes: Note[]
   followUpRules: FollowUpRules
   saveFollowUpRules: (rules: FollowUpRules) => Promise<void>
+  /** Start of "This focus period", shared by every date filter in the app. */
+  focusPeriodStart: Date
+  saveFocusPeriodStart: (date: Date) => Promise<void>
   loading: boolean
   error: string | null
   refresh: () => Promise<void>
@@ -137,6 +148,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [followUps, setFollowUps] = useState<FollowUp[]>([])
   const [notes, setNotes] = useState<Note[]>([])
   const [followUpRules, setFollowUpRules] = useState<FollowUpRules>({})
+  const [focusPeriodStart, setFocusPeriodStart] = useState<Date>(DEFAULT_FOCUS_PERIOD_START)
   const [loading, setLoading] = useState(true)
   const [signedIn, setSignedIn] = useState(false)
   /**
@@ -178,7 +190,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         .select('*')
         .order('occurred_at', { ascending: true }),
       supabase.from('notes').select('*').order('created_at', { ascending: false }),
-      supabase.from('app_settings').select('value').eq('key', FOLLOW_UP_KEY).maybeSingle(),
+      supabase
+        .from('app_settings')
+        .select('key, value')
+        .in('key', [FOLLOW_UP_KEY, FOCUS_PERIOD_KEY]),
     ])
 
     if (rolesRes.error) setError(rolesRes.error.message)
@@ -215,7 +230,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       // The settings table may not exist yet — defaults still apply.
       console.warn('Settings unavailable:', settingsRes.error.message)
     } else {
-      setFollowUpRules(parseRules(settingsRes.data?.value))
+      const rows = (settingsRes.data as { key: string; value: unknown }[]) ?? []
+      const row = (key: string) => rows.find((r) => r.key === key)?.value
+      setFollowUpRules(parseRules(row(FOLLOW_UP_KEY)))
+      setFocusPeriodStart(parseFocusPeriodStart(row(FOCUS_PERIOD_KEY)))
     }
 
     setLoading(false)
@@ -353,6 +371,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase
       .from('app_settings')
       .upsert({ key: FOLLOW_UP_KEY, value: rules, updated_at: new Date().toISOString() })
+    if (error) throw error
+  }, [])
+
+  const saveFocusPeriodStart = useCallback(async (date: Date) => {
+    setFocusPeriodStart(date)
+    const { error } = await supabase.from('app_settings').upsert({
+      key: FOCUS_PERIOD_KEY,
+      value: serializeFocusPeriodStart(date),
+      updated_at: new Date().toISOString(),
+    })
     if (error) throw error
   }, [])
 
@@ -561,6 +589,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       notes,
       followUpRules,
       saveFollowUpRules,
+      focusPeriodStart,
+      saveFocusPeriodStart,
       loading,
       error,
       refresh,
@@ -590,6 +620,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       notes,
       followUpRules,
       saveFollowUpRules,
+      focusPeriodStart,
+      saveFocusPeriodStart,
       loading,
       error,
       refresh,

@@ -18,7 +18,7 @@ import { useData } from '@/context/DataContext'
 import { useJourneys } from '@/hooks/useData'
 import { useUI } from '@/context/UIContext'
 import { Journey } from '@/lib/journey'
-import { BOARD_COLUMNS, BoardColumn, midStep, rejectionFor, statusMeta } from '@/lib/status'
+import { BOARD_COLUMNS, BoardColumn, boardColumnFor, midStep, rejectionFor, statusMeta } from '@/lib/status'
 import { inRange, relativeAgo, relativeDays } from '@/lib/dates'
 import DateRangePills, {
   RangeSelection,
@@ -44,7 +44,7 @@ export default function Pipeline() {
   const columns = useMemo(() => {
     const q = query.trim().toLowerCase()
     const visible = journeys.filter((j) => {
-      if (!BOARD_COLUMNS.some((c) => c.statuses.includes(j.status))) return false
+      if (!boardColumnFor(j.status, j.furthestRank)) return false
       // Dropping a candidate who never had a role means giving up on placing
       // them, not a rejection in a process — that belongs to the role search,
       // not to the board.
@@ -64,7 +64,7 @@ export default function Pipeline() {
     return BOARD_COLUMNS.map((column) => ({
       column,
       items: visible
-        .filter((j) => column.statuses.includes(j.status))
+        .filter((j) => boardColumnFor(j.status, j.furthestRank) === column.id)
         .sort((a, b) => b.daysInStatus - a.daysInStatus),
     }))
   }, [journeys, query, range])
@@ -79,7 +79,7 @@ export default function Pipeline() {
     if (!column || !journey) return
     // Dropping into the column a card already sits in is a no-op — moving
     // between mid steps happens in the candidate panel.
-    if (column.statuses.includes(journey.status)) return
+    if (boardColumnFor(journey.status, journey.furthestRank) === column.id) return
     const target = column.id === 'rejected' ? rejectionFor(journey.status) : column.entry
     // A hire is not official until we know what they signed at — ask first,
     // then record the move and the salary together.

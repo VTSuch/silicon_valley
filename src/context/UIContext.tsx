@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 
-export type TabId = 'dashboard' | 'pipeline' | 'candidates' | 'roles' | 'metrics'
+export type TabId = 'dashboard' | 'pipeline' | 'candidates' | 'roles' | 'metrics' | 'settings'
 
 /** Seed values for the new-candidate modal, used by duplicate and assign-role. */
 export interface AddCandidatePrefill {

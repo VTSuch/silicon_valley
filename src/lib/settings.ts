@@ -1,5 +1,6 @@
 import { CandidateStatus } from '@/types'
 import { ALL_STATUSES, STATUS_META } from './status'
+import { DEFAULT_FOCUS_PERIOD_START, fromDateInput, startOfDay, toDateInput } from './dates'
 
 export const FOLLOW_UP_KEY = 'follow_up_rules'
 
@@ -39,4 +40,31 @@ export function parseRules(value: unknown): FollowUpRules {
     }
   }
   return out
+}
+
+// --- Focus period ------------------------------------------------------------
+
+export const FOCUS_PERIOD_KEY = 'focus_period_start'
+
+/**
+ * The settings row stores the date as `yyyy-mm-dd`, read back into a local
+ * midnight. Anything unparseable falls back to the built-in default so a bad
+ * row can never leave the app without a focus period.
+ */
+export function parseFocusPeriodStart(value: unknown): Date {
+  const raw =
+    typeof value === 'string'
+      ? value
+      : value && typeof value === 'object' && 'date' in value
+        ? (value as { date: unknown }).date
+        : null
+  if (typeof raw !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return DEFAULT_FOCUS_PERIOD_START
+  }
+  const d = fromDateInput(raw)
+  return Number.isNaN(d.getTime()) ? DEFAULT_FOCUS_PERIOD_START : startOfDay(d)
+}
+
+export function serializeFocusPeriodStart(date: Date) {
+  return { date: toDateInput(date) }
 }

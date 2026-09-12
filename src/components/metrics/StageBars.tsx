@@ -2,22 +2,33 @@
 
 import { useState } from 'react'
 import { METRIC_GROUPS, StageGroup } from '@/lib/status'
-import { formatFullMonth } from '@/lib/dates'
+import { Granularity, formatFullPeriod } from '@/lib/dates'
+import ChartTooltip, { useCursorTooltip } from './ChartTooltip'
 
-export interface MonthBucket {
-  month: Date
+export interface PeriodBucket {
+  /** First day of the month or week this bar covers. */
+  start: Date
   label: string
   counts: Record<StageGroup, number>
   total: number
+  /** Of that cohort, how many now sit in the board's Rejected column. */
+  rejected: number
 }
 
 /**
- * Stacked bars, one per month, split by the furthest stage each candidate
- * reached. Candidates are counted in the month they were submitted, no matter
+ * Stacked bars, one per period, split by the furthest stage each candidate
+ * reached. Candidates are counted in the period they were submitted, no matter
  * when the later stages happened.
  */
-export default function StageBars({ buckets }: { buckets: MonthBucket[] }) {
+export default function StageBars({
+  buckets,
+  granularity,
+}: {
+  buckets: PeriodBucket[]
+  granularity: Granularity
+}) {
   const [hover, setHover] = useState<number | null>(null)
+  const { ref, pos, onMouseMove, onMouseLeave } = useCursorTooltip()
   const max = Math.max(1, ...buckets.map((b) => b.total))
 
   if (buckets.length === 0) {
@@ -29,10 +40,18 @@ export default function StageBars({ buckets }: { buckets: MonthBucket[] }) {
   }
 
   return (
-    <div className="relative">
-      <div className="flex gap-4">
+    <div
+      ref={ref}
+      className="relative"
+      onMouseMove={onMouseMove}
+      onMouseLeave={() => {
+        onMouseLeave()
+        setHover(null)
+      }}
+    >
+      <div className="flex gap-2">
         {/* y axis */}
-        <div className="flex w-8 flex-col justify-between py-1 text-right text-[0.625rem] tabular-nums text-zinc-400">
+        <div className="flex w-6 flex-col justify-between py-1 text-right text-[0.625rem] tabular-nums text-zinc-400">
           {[1, 0.75, 0.5, 0.25, 0].map((f) => (
             <span key={f}>{Math.round(max * f)}</span>
           ))}
@@ -46,16 +65,16 @@ export default function StageBars({ buckets }: { buckets: MonthBucket[] }) {
             ))}
           </div>
 
-          <div className="relative flex h-56 items-end gap-1 overflow-x-auto sm:gap-2">
+          <div className="relative flex h-56 items-end gap-px">
             {buckets.map((b, i) => (
               <div
                 key={b.label}
-                className="group flex min-w-[28px] flex-1 flex-col items-center justify-end self-stretch"
+                className="group flex min-w-0 flex-1 flex-col items-center justify-end self-stretch"
                 onMouseEnter={() => setHover(i)}
                 onMouseLeave={() => setHover(null)}
               >
                 <div
-                  className={`flex w-full max-w-[64px] flex-col-reverse justify-start transition-opacity ${
+                  className={`flex w-full flex-col-reverse justify-start transition-opacity ${
                     hover !== null && hover !== i ? 'opacity-40' : ''
                   }`}
                   style={{ height: `${(b.total / max) * 100}%` }}
@@ -80,11 +99,11 @@ export default function StageBars({ buckets }: { buckets: MonthBucket[] }) {
           </div>
 
           {/* x axis */}
-          <div className="mt-2 flex gap-1 sm:gap-2">
+          <div className="mt-2 flex gap-px">
             {buckets.map((b, i) => (
               <div
                 key={b.label}
-                className={`min-w-[28px] flex-1 text-center text-[0.625rem] ${
+                className={`min-w-0 flex-1 truncate text-center text-[0.625rem] ${
                   hover === i ? 'font-semibold text-zinc-900' : 'text-zinc-400'
                 }`}
               >
@@ -96,9 +115,9 @@ export default function StageBars({ buckets }: { buckets: MonthBucket[] }) {
       </div>
 
       {hover !== null && buckets[hover] && (
-        <div className="pointer-events-none absolute right-0 top-0 z-10 w-52 rounded-xl border border-zinc-200 bg-white p-3 shadow-lg">
+        <ChartTooltip pos={pos}>
           <div className="mb-2 text-sm font-semibold text-zinc-900">
-            {formatFullMonth(buckets[hover].month)}
+            {formatFullPeriod(buckets[hover].start, granularity)}
           </div>
           <ul className="space-y-1">
             {METRIC_GROUPS.map((g) => (
@@ -113,13 +132,26 @@ export default function StageBars({ buckets }: { buckets: MonthBucket[] }) {
               </li>
             ))}
           </ul>
-          <div className="mt-2 flex items-center justify-between border-t border-zinc-100 pt-2 text-xs">
-            <span className="text-zinc-500">Total submitted</span>
-            <span className="font-semibold tabular-nums text-zinc-900">
-              {buckets[hover].total}
-            </span>
+          <div className="mt-2 space-y-1 border-t border-zinc-100 pt-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-zinc-500">Total submitted</span>
+              <span className="font-semibold tabular-nums text-zinc-900">
+                {buckets[hover].total}
+              </span>
+            </div>
+            {/* Rejections cut across the stages above — someone turned down at
+                final stage is counted in both — so they get their own line. */}
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5 text-zinc-500">
+                <span className="h-2 w-2 rounded-full bg-red-400" />
+                Rejected
+              </span>
+              <span className="font-semibold tabular-nums text-zinc-900">
+                {buckets[hover].rejected}
+              </span>
+            </div>
           </div>
-        </div>
+        </ChartTooltip>
       )}
     </div>
   )
@@ -127,7 +159,7 @@ export default function StageBars({ buckets }: { buckets: MonthBucket[] }) {
 
 export function StageLegend() {
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       {[...METRIC_GROUPS].reverse().map((g) => (
         <span key={g.id} className="inline-flex items-center gap-1.5 text-xs text-zinc-600">
           <span className="h-2 w-2 rounded-full" style={{ backgroundColor: g.fill }} />
