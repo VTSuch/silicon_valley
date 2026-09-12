@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarClock, Check, Link2, Plus, RefreshCw, Video, X } from 'lucide-react'
+import { CalendarClock, Check, Link2, Link2Off, Plus, RefreshCw, Video, X } from 'lucide-react'
 import { useData } from '@/context/DataContext'
 import { useUI } from '@/context/UIContext'
 import { Call } from '@/types'
@@ -99,12 +99,21 @@ export default function UpcomingCalls() {
                         </a>
                       )}
                       {candidate && !unsure && (
-                        <button
-                          onClick={() => openCandidate(candidate.id)}
-                          className="rounded-lg px-2 py-1 text-xs font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900"
-                        >
-                          Open
-                        </button>
+                        <>
+                          <button
+                            onClick={() => setPicking(picking === call.id ? null : call.id)}
+                            className="rounded-lg p-1 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700"
+                            title={`Booked by ${call.invitee_name} — link this call to somebody else`}
+                          >
+                            <Link2Off className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => openCandidate(candidate.id)}
+                            className="rounded-lg px-2 py-1 text-xs font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900"
+                          >
+                            Open
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -195,7 +204,8 @@ function CandidatePicker({
   onClose,
 }: {
   call: Call
-  onPick: (candidateId: string) => void
+  /** null clears the link instead of pointing it at somebody. */
+  onPick: (candidateId: string | null) => void
   onClose: () => void
 }) {
   const { candidates } = useData()
@@ -224,6 +234,17 @@ function CandidatePicker({
         className="w-full rounded-md border border-zinc-200 px-2 py-1 text-xs outline-none focus:border-zinc-400"
       />
       <ul className="mt-1 max-h-40 overflow-y-auto">
+        {call.candidate_id && (
+          <li>
+            <button
+              onClick={() => onPick(null)}
+              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs font-medium text-zinc-500 hover:bg-zinc-50"
+            >
+              <Link2Off className="h-3 w-3" />
+              Leave this call unlinked
+            </button>
+          </li>
+        )}
         {options.map((c) => (
           <li key={c.id}>
             <button

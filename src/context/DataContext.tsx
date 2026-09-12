@@ -426,8 +426,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, [refresh])
 
   const linkCall = useCallback(async (callId: string, candidateId: string | null) => {
-    // 'manual' is what stops the next sync from overruling the choice.
-    const match = candidateId ? 'manual' : 'none'
+    // Always 'manual', even when clearing: it marks the choice as a person's,
+    // and that is what stops the next sync from matching the call again.
+    // Without it, an unlinked booking would simply be re-linked minutes later.
+    const match = 'manual'
     setCalls((prev) =>
       prev.map((c) => (c.id === callId ? { ...c, candidate_id: candidateId, match } : c))
     )

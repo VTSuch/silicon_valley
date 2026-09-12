@@ -116,10 +116,15 @@ export async function POST(req: NextRequest) {
 
     for (const booking of bookings) {
       const row = existing.get(booking.uri)
-      // A candidate chosen by hand is never second-guessed by the matcher.
-      const keepExisting = row?.match === 'manual' && row.candidate_id
-      const match = keepExisting
-        ? { candidate: candidates.find((c) => c.id === row.candidate_id) ?? null, kind: 'manual' as const, score: 1 }
+      // A decision made by hand is never second-guessed by the matcher —
+      // including the decision that this booking belongs to nobody.
+      const decided = row?.match === 'manual'
+      const match = decided
+        ? {
+            candidate: candidates.find((c) => c.id === row?.candidate_id) ?? null,
+            kind: 'manual' as const,
+            score: 1,
+          }
         : matchBooking(booking, candidates)
 
       // A booking that is already linked keeps its candidate when a later
