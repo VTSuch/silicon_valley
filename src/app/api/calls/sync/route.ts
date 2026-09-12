@@ -7,6 +7,9 @@ import { sendTelegram } from '@/lib/telegram'
 import { CandidateWithRole } from '@/types'
 
 export const runtime = 'nodejs'
+// Talking to Calendly once per booking adds up; the default budget is tight
+// enough that a slow reply used to kill the run halfway.
+export const maxDuration = 60
 
 /** How far around today the sync looks. */
 const DAYS_BACK = 1
@@ -67,6 +70,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Supabase service key is not set' }, { status: 501 })
   }
 
+  // Loaded before anything else on purpose. This used to sit after the
+  // Calendly round trips, fifteen seconds into the request, where a slow reply
+  // came back as a gateway timeout and took the whole sync with it. There is
+  // also nothing to sync without it, so failing here costs nothing.
+  let candidates: CandidateWithRole[] = []
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, error } = await db.from('candidates').select('*, role:roles(*)')
+    if (data?.length) {
+      candidates = data as CandidateWithRole[]
+      break
+    }
+    if (attempt === 1) {
+      return NextResponse.json(
+        {
+          error: `Could not load candidates to match against: ${error?.message ?? 'none returned'}`,
+        },
+        { status: 502 }
+      )
+    }
+    await new Promise((resolve) => setTimeout(resolve, 750))
+  }
+
   const now = new Date()
   const from = new Date(now.getTime() - DAYS_BACK * 86_400_000)
   const to = new Date(now.getTime() + DAYS_AHEAD * 86_400_000)
@@ -97,19 +122,6 @@ export async function POST(req: NextRequest) {
         fresh.map(async (event) => toBooking(event, await invitees(token, event.uri)))
       )
     ).filter((b): b is CalendlyBooking => b !== null)
-
-    const { data: candidateRows, error: candidateError } = await db
-      .from('candidates')
-      .select('*, role:roles(*)')
-    // Without the candidates there is nothing to match against, and carrying
-    // on would quietly rewrite every booking as "nobody" — unlinking the lot.
-    // Far better to fail the sync and leave what is already stored alone.
-    if (candidateError || !candidateRows?.length) {
-      throw new Error(
-        `Could not load candidates to match against: ${candidateError?.message ?? 'none returned'}`
-      )
-    }
-    const candidates = candidateRows as CandidateWithRole[]
 
     let linked = 0
     let advanced = 0
