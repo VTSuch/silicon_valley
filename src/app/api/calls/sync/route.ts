@@ -204,6 +204,19 @@ export async function POST(req: NextRequest) {
       if (!candidate || !confident || !upcoming) continue
       if (candidate.status !== 'calendly_sent') continue
 
+      // Event first, for the note: the database keeps the status in step with
+      // the newest event, so this move is recorded rather than merely applied.
+      const { error: logError } = await db.from('candidate_status_events').insert({
+        candidate_id: candidate.id,
+        status: 'calendly_booked',
+        occurred_at: new Date().toISOString(),
+        note: AUTO_NOTE,
+      })
+      if (logError) {
+        console.warn('Could not record the move', candidate.id, logError.message)
+        continue
+      }
+
       const { error: moveError } = await db
         .from('candidates')
         .update({ status: 'calendly_booked' })
@@ -214,13 +227,6 @@ export async function POST(req: NextRequest) {
       }
       candidate.status = 'calendly_booked'
       advanced++
-
-      await db.from('candidate_status_events').insert({
-        candidate_id: candidate.id,
-        status: 'calendly_booked',
-        occurred_at: new Date().toISOString(),
-        note: AUTO_NOTE,
-      })
 
       // Same notification any manual move would send. A failure here must not
       // cost us the rest of the sync: the move is already recorded.

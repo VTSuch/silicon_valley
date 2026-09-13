@@ -620,15 +620,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       hiredSalary?: number
     ) => {
       const before = candidatesRef.current.find((c) => c.id === id)
-      const updated = await updateCandidate(id, {
-        status,
-        ...(hiredSalary === undefined ? {} : { hired_salary: hiredSalary }),
-      })
+      // The event goes in first, carrying the date and note the user chose.
+      // The database keeps a candidate's status equal to their newest event,
+      // so writing it first means our version is the one that lands — the
+      // safety net only writes a bare event when something skips this step.
       try {
         await addStatusEvent(id, status, occurredAt ?? new Date(), note)
       } catch (e) {
         console.warn('Could not record status event', e)
       }
+      const updated = await updateCandidate(id, {
+        status,
+        ...(hiredSalary === undefined ? {} : { hired_salary: hiredSalary }),
+      })
       if (before?.status !== status) {
         notify({
           type: 'candidate_status_changed',
