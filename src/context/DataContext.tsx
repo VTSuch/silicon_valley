@@ -620,19 +620,68 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       hiredSalary?: number
     ) => {
       const before = candidatesRef.current.find((c) => c.id === id)
+      const when = occurredAt ?? new Date()
+
+      // Move the candidate locally before anything is written, so a card
+      // dropped on the board stays where it was dropped. A failed write
+      // rolls the move back, and any later load overwrites it with the
+      // database's version either way.
+      const pendingId = `pending-${when.getTime()}-${id}`
+      const pending: StatusEvent = {
+        id: pendingId,
+        candidate_id: id,
+        status,
+        occurred_at: when.toISOString(),
+        note: note || undefined,
+        created_at: new Date().toISOString(),
+      }
+      setStatusEvents((prev) => [...prev, pending])
+      setCandidates((prev) =>
+        prev.map((c) =>
+          c.id === id
+            ? {
+                ...c,
+                status,
+                ...(hiredSalary === undefined ? {} : { hired_salary: hiredSalary }),
+              }
+            : c
+        )
+      )
+
       // The event goes in first, carrying the date and note the user chose.
       // The database keeps a candidate's status equal to their newest event,
       // so writing it first means our version is the one that lands — the
       // safety net only writes a bare event when something skips this step.
       try {
-        await addStatusEvent(id, status, occurredAt ?? new Date(), note)
+        const { data, error } = await supabase
+          .from('candidate_status_events')
+          .insert({
+            candidate_id: id,
+            status,
+            occurred_at: when.toISOString(),
+            note: note || null,
+          })
+          .select()
+          .single()
+        if (error) throw error
+        setStatusEvents((prev) => prev.map((e) => (e.id === pendingId ? (data as StatusEvent) : e)))
       } catch (e) {
         console.warn('Could not record status event', e)
+        setStatusEvents((prev) => prev.filter((e) => e.id !== pendingId))
       }
-      const updated = await updateCandidate(id, {
-        status,
-        ...(hiredSalary === undefined ? {} : { hired_salary: hiredSalary }),
-      })
+
+      let updated: CandidateWithRole
+      try {
+        updated = await updateCandidate(id, {
+          status,
+          ...(hiredSalary === undefined ? {} : { hired_salary: hiredSalary }),
+        })
+      } catch (e) {
+        // Put the card back where it came from — the move never landed.
+        setStatusEvents((prev) => prev.filter((ev) => ev.id !== pendingId))
+        if (before) setCandidates((prev) => prev.map((c) => (c.id === id ? before : c)))
+        throw e
+      }
       if (before?.status !== status) {
         notify({
           type: 'candidate_status_changed',
@@ -644,7 +693,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         })
       }
     },
-    [addStatusEvent, updateCandidate]
+    [updateCandidate]
   )
 
   const activeRoles = useMemo(() => roles.filter((r) => !r.archived_at), [roles])
