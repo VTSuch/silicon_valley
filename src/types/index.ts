@@ -122,3 +122,44 @@ export interface Call {
   remote_updated_at?: string | null
   created_at: string
 }
+
+// --- Outreach ---------------------------------------------------------------
+
+export type ProspectStatus =
+  | 'pending'
+  | 'sent'
+  | 'accepted'
+  | 'replied'
+  | 'interested'
+  | 'declined'
+  | 'skipped'
+  | 'rejected'
+
+export interface OutreachSearch {
+  id: string
+  job_title: string
+  location?: string | null
+  notes?: string | null
+  created_by?: string | null
+  archived_at?: string | null
+  created_at: string
+}
+
+/** A cold lead extracted from Paraform, and where it is in the outreach. */
+export interface Prospect {
+  id: string
+  search_id: string
+  /** Import order; the queue serves prospects in this order. */
+  position: number
+  name: string
+  company?: string | null
+  title?: string | null
+  location?: string | null
+  tier?: string | null
+  linkedin_url: string
+  status: ProspectStatus
+  sent_at?: string | null
+  sent_by?: string | null
+  status_at: string
+  created_at: string
+}

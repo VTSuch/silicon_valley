@@ -136,7 +136,7 @@ const CANDIDATE_SELECT = `*, role:roles(*)`
  * which is whatever the sign-up flow put in user metadata; fall back through
  * the usual keys and only use the email as a last resort.
  */
-function displayName(user: { email?: string; user_metadata?: Record<string, unknown> } | null) {
+export function displayName(user: { email?: string; user_metadata?: Record<string, unknown> } | null) {
   const meta = user?.user_metadata ?? {}
   for (const key of ['display_name', 'displayName', 'full_name', 'name']) {
     const value = meta[key]

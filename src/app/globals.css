@@ -60,3 +60,7 @@ body {
 }
 .sv-fade-in { animation: sv-fade-in 0.15s ease-out; }
 .sv-slide-in { animation: sv-slide-in 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* Outreach queue: width of one deck card. The cards slide between slots by transform. */
+:root { --card-w: 32rem; }
+@media (max-width: 640px) { :root { --card-w: 86vw; } }

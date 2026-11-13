@@ -7,6 +7,7 @@ import {
   KanbanSquare,
   LayoutDashboard,
   LogOut,
+  Send,
   Plus,
   Settings,
   Users,
@@ -20,6 +21,7 @@ const TABS: { id: TabId; name: string; icon: React.ElementType }[] = [
   { id: 'candidates', name: 'Candidates', icon: Users },
   { id: 'roles', name: 'Roles', icon: Briefcase },
   { id: 'metrics', name: 'Metrics', icon: BarChart3 },
+  { id: 'outreach', name: 'Outreach', icon: Send },
 ]
 
 interface TopNavProps {
